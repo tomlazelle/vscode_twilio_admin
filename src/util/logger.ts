@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 
 const SECRET_PATTERNS = [
-  /SK[a-z0-9]{32}/g,
-  /AC[a-z0-9]{32}:[^\s"']*/g,
+  /\bSK[A-Z0-9]{32}\b/gi,
+  /\bAC[A-Z0-9]{32}:[^\s"']*/gi,
   /"authToken"\s*:\s*"[^"]*"/g,
   /Authorization:\s*Basic\s+[A-Za-z0-9+/=]+/g,
 ];
