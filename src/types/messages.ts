@@ -36,6 +36,6 @@ export type WebviewToExtensionMessage =
   | { type: 'loadCallLogs' }
   | { type: 'loadSmsLogs' }
   | { type: 'loadCallDetail'; callSid: string }
-  | { type: 'playRecording';  recordingSid: string; accountSid: string }
+  | { type: 'playRecording';  recordingSid: string; accountSid?: string }
   | { type: 'addBookmark';    phoneNumberSid: string; phoneNumber: string; label: string; tags: string[] }
   | { type: 'refreshNumbers' };
