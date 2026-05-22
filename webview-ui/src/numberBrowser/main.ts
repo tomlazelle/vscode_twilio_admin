@@ -110,7 +110,7 @@ function renderShell(): void {
   app.innerHTML = `
     <div class="toolbar">
       <div class="filter-wrap">
-        <span class="filter-icon">$(search)</span>
+        <span class="filter-icon" aria-hidden="true"><svg width="1em" height="1em" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor" style="vertical-align:middle"><path d="M15.25 13.79L11.58 10.12a5.44 5.44 0 1 0-1.46 1.46l3.67 3.67a1 1 0 0 0 1.46 0 1 1 0 0 0 0-1.46zm-9.81-2.59a3.94 3.94 0 1 1 3.94-3.94 3.94 3.94 0 0 1-3.94 3.94z"/></svg></span>
         <input
           id="filter-input"
           type="text"

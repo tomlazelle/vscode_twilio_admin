@@ -1,19 +1,22 @@
 import * as vscode from 'vscode';
+import { z } from 'zod';
 import { generateNonce } from '../util/nonce.js';
 import type { ServiceContainer } from '../types/models.js';
 
-interface SaveMessage {
-  type: 'save';
-  id?: string;
-  friendlyName: string;
-  accountSid: string;
-  authToken?: string;
-}
+const IncomingMessageSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('ready') }),
+  z.object({
+    type: z.literal('save'),
+    id: z.string().optional(),
+    friendlyName: z.string(),
+    accountSid: z.string(),
+    authToken: z.string().optional(),
+  }),
+  z.object({ type: z.literal('cancel') }),
+]);
 
-type IncomingMessage =
-  | { type: 'ready' }
-  | SaveMessage
-  | { type: 'cancel' };
+type IncomingMessage = z.infer<typeof IncomingMessageSchema>;
+type SaveMessage = Extract<IncomingMessage, { type: 'save' }>;
 
 export class AccountFormPanel {
   static currentPanel: AccountFormPanel | undefined;
@@ -67,13 +70,19 @@ export class AccountFormPanel {
     this._panel.webview.html = this._getHtml(panel.webview);
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this._panel.webview.onDidReceiveMessage(
-      (msg: IncomingMessage) => void this._handleMessage(msg),
+      (raw: unknown) => void this._handleMessage(raw),
       null,
       this._disposables
     );
   }
 
-  private async _handleMessage(msg: IncomingMessage): Promise<void> {
+  private async _handleMessage(raw: unknown): Promise<void> {
+    const parsed = IncomingMessageSchema.safeParse(raw);
+    if (!parsed.success) {
+      this.services.logger.warn(`AccountForm received invalid message: ${JSON.stringify(raw)}`);
+      return;
+    }
+    const msg = parsed.data;
     switch (msg.type) {
       case 'ready':
         await this._sendInit();

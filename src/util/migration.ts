@@ -23,6 +23,8 @@ export async function migrateFileStore(storageUri: vscode.Uri): Promise<void> {
   // Future migrations added here:
   // if (version < 2) { await migrateV1ToV2(storageUri); version = 2; }
 
+  const dirUri = vscode.Uri.joinPath(storageUri, 'twilio-admin');
+  await vscode.workspace.fs.createDirectory(dirUri);
   await vscode.workspace.fs.writeFile(
     versionUri,
     Buffer.from(JSON.stringify({ version: CURRENT_VERSION }), 'utf-8')

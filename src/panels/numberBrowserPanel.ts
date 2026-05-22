@@ -29,7 +29,10 @@ export class NumberBrowserPanel {
     const column = vscode.window.activeTextEditor?.viewColumn;
 
     if (NumberBrowserPanel.currentPanel) {
-      NumberBrowserPanel.currentPanel._panel.reveal(column);
+      const existing = NumberBrowserPanel.currentPanel;
+      existing._subaccountId = subaccountId;
+      existing._panel.reveal(column);
+      void existing._loadNumbers();
       return;
     }
 
@@ -55,7 +58,7 @@ export class NumberBrowserPanel {
   private constructor(
     panel: vscode.WebviewPanel,
     private readonly extensionUri: vscode.Uri,
-    private readonly subaccountId: string,
+    private _subaccountId: string,
     private readonly services: ServiceContainer
   ) {
     this._panel = panel;
@@ -72,12 +75,12 @@ export class NumberBrowserPanel {
   private async _loadNumbers(): Promise<void> {
     try {
       const [numbers, allBookmarks] = await Promise.all([
-        this.services.twilioService.listNumbers(this.subaccountId),
+        this.services.twilioService.listNumbers(this._subaccountId),
         this.services.bookmarkService.getAll(),
       ]);
       const bookmarkedSids: Record<string, string> = {};
       for (const b of allBookmarks) {
-        if (b.subaccountId === this.subaccountId) {
+        if (b.subaccountId === this._subaccountId) {
           bookmarkedSids[b.phoneNumberSid] = b.id;
         }
       }
@@ -113,7 +116,7 @@ export class NumberBrowserPanel {
 
         try {
           const bookmark = await this.services.bookmarkService.add({
-            subaccountId: this.subaccountId,
+            subaccountId: this._subaccountId,
             phoneNumberSid: msg.phoneNumberSid,
             phoneNumber: msg.phoneNumber,
             label: label.trim(),

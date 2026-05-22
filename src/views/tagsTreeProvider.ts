@@ -48,9 +48,12 @@ export class TagsTreeProvider implements vscode.TreeDataProvider<TagTreeItem> {
     }
 
     const allBookmarks = await this.bookmarkService.getAll();
-    return tags.map(tag => {
-      const count = allBookmarks.filter(b => b.tags.includes(tag)).length;
-      return new TagTreeItem(tag, count, tag === activeFilter);
-    });
+    const countByTag = new Map<string, number>();
+    for (const b of allBookmarks) {
+      for (const t of b.tags) {
+        countByTag.set(t, (countByTag.get(t) ?? 0) + 1);
+      }
+    }
+    return tags.map(tag => new TagTreeItem(tag, countByTag.get(tag) ?? 0, tag === activeFilter));
   }
 }

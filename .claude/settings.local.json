@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(ls \"f:\\\\projects\\\\twilio_admin\\\\src\")",
-      "Read(//f/projects/twilio_admin/src/**)"
-    ]
-  }
-}
