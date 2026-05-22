@@ -1,0 +1,34 @@
+# Claude Code local settings (machine-specific paths/permissions)
+.claude/settings.local.json
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Packaged extension
+*.vsix
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+
+# Environment / secrets
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code workspace settings (keep .vscode/extensions.json if present)
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,20 @@
+# Normalize line endings to LF on commit so Linux CI matches Windows/macOS dev machines
+* text=auto eol=lf
+
+# Explicitly text
+*.ts   text eol=lf
+*.mjs  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.html text eol=lf
+*.css  text eol=lf
+*.svg  text eol=lf
+
+# Binary — never diff or convert
+*.vsix  binary
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.mp3   binary
