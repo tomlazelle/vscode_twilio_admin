@@ -1,0 +1,14 @@
+src/**
+webview-ui/**
+test/**
+out/**
+out-webview/**
+node_modules/**
+.eslintrc.json
+tsconfig*.json
+esbuild*.mjs
+vitest.config.ts
+.vscode/**
+**/*.map
+**/*.ts
+!dist/**
