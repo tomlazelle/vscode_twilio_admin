@@ -1,0 +1,43 @@
+name: Attach Release Artifact
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. v1.2.0)"
+        required: true
+
+jobs:
+  vsix:
+    name: Build and attach .vsix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set version from tag
+        run: |
+          TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
+          npm pkg set version="${TAG#v}"
+
+      - name: Build extension
+        run: npm run package
+
+      - name: Upload .vsix to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+        run: gh release upload "$TAG" *.vsix --clobber
