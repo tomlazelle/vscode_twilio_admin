@@ -8,8 +8,12 @@
     "vscode": "^1.85.0"
   },
   "license": "Unlicense",
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "scripts": {
     "compile": "node esbuild.extension.mjs",
@@ -28,7 +32,6 @@
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/exec": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^20.14.0",
     "@types/uuid": "^9.0.8",
@@ -57,40 +60,146 @@
     },
     "views": {
       "twilioAdmin": [
-        { "id": "twilioAdmin.accounts",  "name": "Accounts",  "type": "tree" },
-        { "id": "twilioAdmin.bookmarks", "name": "Bookmarks", "type": "tree" },
-        { "id": "twilioAdmin.tags",      "name": "Tags",      "type": "tree" }
+        {
+          "id": "twilioAdmin.accounts",
+          "name": "Accounts",
+          "type": "tree"
+        },
+        {
+          "id": "twilioAdmin.bookmarks",
+          "name": "Bookmarks",
+          "type": "tree"
+        },
+        {
+          "id": "twilioAdmin.tags",
+          "name": "Tags",
+          "type": "tree"
+        }
       ]
     },
     "commands": [
-      { "command": "twilioAdmin.addAccount",         "title": "Add Account",        "category": "Twilio Admin" },
-      { "command": "twilioAdmin.editAccount",        "title": "Edit Account",       "category": "Twilio Admin" },
-      { "command": "twilioAdmin.deleteAccount",      "title": "Delete Account",     "category": "Twilio Admin" },
-      { "command": "twilioAdmin.browseNumbers",      "title": "Browse Numbers",     "category": "Twilio Admin" },
-      { "command": "twilioAdmin.addBookmark",        "title": "Add Bookmark",       "category": "Twilio Admin" },
-      { "command": "twilioAdmin.openBookmarkDetail", "title": "Open Bookmark",      "category": "Twilio Admin" },
-      { "command": "twilioAdmin.editWebhooks",       "title": "Edit Webhooks",      "category": "Twilio Admin" },
-      { "command": "twilioAdmin.refreshCallLogs",    "title": "Refresh Call Logs",  "category": "Twilio Admin" },
-      { "command": "twilioAdmin.refreshMessageLogs", "title": "Refresh SMS Logs",   "category": "Twilio Admin" },
-      { "command": "twilioAdmin.playRecording",      "title": "Play Recording",     "category": "Twilio Admin" },
-      { "command": "twilioAdmin.lockCredentials",    "title": "Lock Credentials",   "category": "Twilio Admin" },
-      { "command": "twilioAdmin.unlockCredentials",  "title": "Unlock Credentials", "category": "Twilio Admin" },
-      { "command": "twilioAdmin.filterByTag",        "title": "Filter by Tag",      "category": "Twilio Admin" },
-      { "command": "twilioAdmin.refreshAccounts",    "title": "Refresh",            "category": "Twilio Admin", "icon": "$(refresh)" },
-      { "command": "twilioAdmin.refreshBookmarks",   "title": "Refresh",            "category": "Twilio Admin", "icon": "$(refresh)" }
+      {
+        "command": "twilioAdmin.addAccount",
+        "title": "Add Account",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.editAccount",
+        "title": "Edit Account",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.deleteAccount",
+        "title": "Delete Account",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.browseNumbers",
+        "title": "Browse Numbers",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.addBookmark",
+        "title": "Add Bookmark",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.openBookmarkDetail",
+        "title": "Open Bookmark",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.editWebhooks",
+        "title": "Edit Webhooks",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.refreshCallLogs",
+        "title": "Refresh Call Logs",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.refreshMessageLogs",
+        "title": "Refresh SMS Logs",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.playRecording",
+        "title": "Play Recording",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.lockCredentials",
+        "title": "Lock Credentials",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.unlockCredentials",
+        "title": "Unlock Credentials",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.filterByTag",
+        "title": "Filter by Tag",
+        "category": "Twilio Admin"
+      },
+      {
+        "command": "twilioAdmin.refreshAccounts",
+        "title": "Refresh",
+        "category": "Twilio Admin",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "twilioAdmin.refreshBookmarks",
+        "title": "Refresh",
+        "category": "Twilio Admin",
+        "icon": "$(refresh)"
+      }
     ],
     "menus": {
       "view/title": [
-        { "command": "twilioAdmin.addAccount",      "when": "view == twilioAdmin.accounts",  "group": "navigation" },
-        { "command": "twilioAdmin.refreshAccounts", "when": "view == twilioAdmin.accounts",  "group": "navigation" },
-        { "command": "twilioAdmin.refreshBookmarks","when": "view == twilioAdmin.bookmarks", "group": "navigation" }
+        {
+          "command": "twilioAdmin.addAccount",
+          "when": "view == twilioAdmin.accounts",
+          "group": "navigation"
+        },
+        {
+          "command": "twilioAdmin.refreshAccounts",
+          "when": "view == twilioAdmin.accounts",
+          "group": "navigation"
+        },
+        {
+          "command": "twilioAdmin.refreshBookmarks",
+          "when": "view == twilioAdmin.bookmarks",
+          "group": "navigation"
+        }
       ],
       "view/item/context": [
-        { "command": "twilioAdmin.editAccount",   "when": "viewItem == account",   "group": "1_account@1" },
-        { "command": "twilioAdmin.deleteAccount", "when": "viewItem == account",   "group": "1_account@2" },
-        { "command": "twilioAdmin.browseNumbers", "when": "viewItem == account",   "group": "1_account@3" },
-        { "command": "twilioAdmin.editWebhooks",  "when": "viewItem == bookmark",  "group": "1_bookmark@1" },
-        { "command": "twilioAdmin.filterByTag",   "when": "viewItem == tag",       "group": "1_tag@1" }
+        {
+          "command": "twilioAdmin.editAccount",
+          "when": "viewItem == account",
+          "group": "1_account@1"
+        },
+        {
+          "command": "twilioAdmin.deleteAccount",
+          "when": "viewItem == account",
+          "group": "1_account@2"
+        },
+        {
+          "command": "twilioAdmin.browseNumbers",
+          "when": "viewItem == account",
+          "group": "1_account@3"
+        },
+        {
+          "command": "twilioAdmin.editWebhooks",
+          "when": "viewItem == bookmark",
+          "group": "1_bookmark@1"
+        },
+        {
+          "command": "twilioAdmin.filterByTag",
+          "when": "viewItem == tag",
+          "group": "1_tag@1"
+        }
       ]
     },
     "configuration": {
