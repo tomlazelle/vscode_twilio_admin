@@ -16,22 +16,17 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.release.tag_name || github.event.inputs.tag }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "npm"
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Set version from tag
-        run: |
-          TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
-          npm pkg set version="${TAG#v}"
 
       - name: Build extension
         run: npm run package
