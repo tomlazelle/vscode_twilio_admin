@@ -17,7 +17,7 @@ Twilio Admin is a local, single-user tool. It requires no backend service, no Do
 ## Requirements
 
 - VS Code 1.85 or later
-- A Twilio account with one or more subaccountsp
+- A Twilio account with one or more subaccounts
 - Node.js 20+ (development only — not required to run the installed extension)
 
 ## Installation
@@ -181,6 +181,28 @@ npm run package
 ```
 
 Produces `twilio-admin-0.1.0.vsix` in the project root.
+
+## CI and release
+
+This repository uses two GitHub Actions workflows for releases:
+
+- `.github/workflows/semantic-release.yml`
+    - Trigger: push to `main`
+    - Runs `semantic-release` to compute the next release, update changelog/version metadata, and publish a GitHub release.
+
+- `.github/workflows/release-artifact.yml`
+    - Trigger: published release (and manual `workflow_dispatch`)
+    - Checks out the release tag, normalizes the package version from the tag, builds the extension, and uploads the `.vsix` artifact to that release.
+
+### Tag format for release artifacts
+
+The artifact workflow accepts these tag forms and converts them to a valid extension version before packaging:
+
+- `v1` -> `1.0.0`
+- `v1.2` -> `1.2.0`
+- `v1.2.3` (or prerelease/build variants) -> unchanged semantic version
+
+If a tag cannot be normalized to a semantic version, the workflow fails early with a clear error.
 
 ### Project structure
 
