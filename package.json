@@ -7,6 +7,10 @@
   "engines": {
     "vscode": "^1.85.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tomlazelle/vscode_twilio_admin.git"
+  },
   "license": "Unlicense",
   "categories": [
     "Other"

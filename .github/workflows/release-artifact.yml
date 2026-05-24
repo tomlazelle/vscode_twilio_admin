@@ -16,11 +16,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.release.tag_name || github.event.inputs.tag }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "npm"
@@ -28,10 +28,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Set version from tag
+      - name: Set package version from release tag
+        env:
+          TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
         run: |
-          TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
-          npm pkg set version="${TAG#v}"
+          VERSION="${TAG#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag '$TAG' is not a valid semver version for package.json"
+            exit 1
+          fi
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Build extension
         run: npm run package
