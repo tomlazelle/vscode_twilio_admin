@@ -7,6 +7,10 @@
   "engines": {
     "vscode": "^1.85.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tomlazelle/vscode_twilio_admin.git"
+  },
   "license": "Unlicense",
   "categories": [
     "Other"
@@ -23,7 +27,7 @@
     "test": "vitest run",
     "test:integration": "vscode-test",
     "lint": "eslint src --ext ts",
-    "package": "npm run compile:all && vsce package --no-dependencies --allow-missing-repository"
+    "package": "npm run compile:all && vsce package --no-dependencies"
   },
   "dependencies": {
     "twilio": "^5.7.0",
