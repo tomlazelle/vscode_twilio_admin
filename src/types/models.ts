@@ -103,6 +103,8 @@ export interface CallDetail extends CallLogEntry {
   forwardedFrom?: string;
   parentCallSid?: string;
   queueTime?: string;
+  errorCode?: number;
+  errorMessage?: string;
 }
 
 export interface CallRecording {
@@ -126,6 +128,16 @@ export interface CallEvent {
   requestParameters: CallEventParameter[];
   responseStatusCode?: number;
   responseContent?: string;
+}
+
+export interface CallNotification {
+  sid: string;
+  logLevel?: string;
+  errorCode?: number;
+  messageText?: string;
+  messageDate?: string;
+  moreInfo?: string;
+  requestUrl?: string;
 }
 
 export interface MessageLogEntry {
