@@ -184,12 +184,34 @@ export class BookmarkDetailPanel {
 
       case 'loadCallDetail': {
         try {
-          const [detail, recordings, events] = await Promise.all([
+          const recordingsPromise = this.services.twilioService
+            .getCallRecordings(bookmark.subaccountId, msg.callSid)
+            .catch(err => {
+              this.services.logger.warn(`Call recordings unavailable for ${msg.callSid}: ${err instanceof Error ? err.message : String(err)}`);
+              return [];
+            });
+
+          const eventsPromise = this.services.twilioService
+            .getCallEvents(bookmark.subaccountId, msg.callSid)
+            .catch(err => {
+              this.services.logger.warn(`Call events unavailable for ${msg.callSid}: ${err instanceof Error ? err.message : String(err)}`);
+              return [];
+            });
+
+          const notificationsPromise = this.services.twilioService
+            .getCallNotifications(bookmark.subaccountId, msg.callSid)
+            .catch(err => {
+              this.services.logger.warn(`Call notifications unavailable for ${msg.callSid}: ${err instanceof Error ? err.message : String(err)}`);
+              return [];
+            });
+
+          const [detail, recordings, events, notifications] = await Promise.all([
             this.services.twilioService.getCallDetail(bookmark.subaccountId, msg.callSid),
-            this.services.twilioService.getCallRecordings(bookmark.subaccountId, msg.callSid),
-            this.services.twilioService.getCallEvents(bookmark.subaccountId, msg.callSid),
+            recordingsPromise,
+            eventsPromise,
+            notificationsPromise,
           ]);
-          this._postMessage({ type: 'callDetailLoaded', detail, recordings, events });
+          this._postMessage({ type: 'callDetailLoaded', detail, recordings, events, notifications });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           this._postMessage({ type: 'error', message, context: 'callDetail' });

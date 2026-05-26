@@ -5,6 +5,7 @@ import type {
   CallDetail,
   CallRecording,
   CallEvent,
+  CallNotification,
   MessageLogEntry,
   PhoneNumberDetail,
   UpdateWebhooksRequest,
@@ -35,8 +36,10 @@ let smsLogsLoading = false;
 let selectedCall: CallDetail | null = null;
 let callRecordings: CallRecording[] = [];
 let callEvents: CallEvent[] = [];
+let callNotifications: CallNotification[] = [];
 let callDetailLoading = false;
 let callDetailPanelOpen = false;
+let mainColScrollTop = 0;
 
 // Webhook form
 let webhookEditing = false;
@@ -116,6 +119,11 @@ function renderAll(): void {
   const app = document.getElementById('app');
   if (!app) { return; }
 
+  const previousMainCol = app.querySelector<HTMLElement>('.main-col');
+  if (previousMainCol) {
+    mainColScrollTop = previousMainCol.scrollTop;
+  }
+
   app.innerHTML = `
     <div class="layout ${callDetailPanelOpen ? 'panel-open' : ''}">
       <div class="main-col">
@@ -130,6 +138,11 @@ function renderAll(): void {
       </div>
     </div>
   `;
+
+  const nextMainCol = app.querySelector<HTMLElement>('.main-col');
+  if (nextMainCol) {
+    nextMainCol.scrollTop = mainColScrollTop;
+  }
 
   attachHandlers();
 }
@@ -368,6 +381,40 @@ function renderCallDetailPanel(): string {
 
   if (!selectedCall) { return ''; }
   const c = selectedCall;
+  const warningFromNotifications = callNotifications.filter(n => classifyNotification(n) === 'warning');
+  const warningFromEvents = callEvents
+    .filter(e => (e.responseStatusCode ?? 0) >= 400 && (e.responseStatusCode ?? 0) < 500)
+    .map((e, i) => ({
+      sid: `event-warning-${i}`,
+      logLevel: 'warning',
+      errorCode: e.responseStatusCode,
+      messageText: `Webhook response returned HTTP ${e.responseStatusCode}`,
+      requestUrl: e.requestUrl,
+    } satisfies CallNotification));
+  const warnings = [...warningFromNotifications, ...warningFromEvents];
+
+  const errorFromNotifications = callNotifications.filter(n => classifyNotification(n) === 'error');
+  const errorFromEvents = callEvents
+    .filter(e => (e.responseStatusCode ?? 0) >= 500)
+    .map((e, i) => ({
+      sid: `event-error-${i}`,
+      logLevel: 'error',
+      errorCode: e.responseStatusCode,
+      messageText: `Webhook response returned HTTP ${e.responseStatusCode}`,
+      requestUrl: e.requestUrl,
+    } satisfies CallNotification));
+  const errors = [
+    ...(c.errorCode || c.errorMessage
+      ? [{
+        sid: `${c.sid}-call-error`,
+        logLevel: 'error',
+        errorCode: c.errorCode,
+        messageText: c.errorMessage,
+      } satisfies CallNotification]
+      : []),
+    ...errorFromNotifications,
+    ...errorFromEvents,
+  ];
 
   return `
     <div class="detail-panel">
@@ -399,9 +446,70 @@ function renderCallDetailPanel(): string {
         </div>
 
         ${renderRecordings()}
+        ${renderIssues(errors, warnings)}
         ${renderEvents()}
 
       </div>
+    </div>
+  `;
+}
+
+function classifyNotification(notification: CallNotification): 'error' | 'warning' | 'info' {
+  const rawLevel = (notification.logLevel ?? '').toString().trim().toLowerCase();
+  if (/error|critical|fatal/.test(rawLevel)) { return 'error'; }
+  if (/warn/.test(rawLevel)) { return 'warning'; }
+
+  // Twilio Notification `log` is sometimes numeric-ish where higher values represent higher severity.
+  const numericLevel = Number(rawLevel);
+  if (!Number.isNaN(numericLevel)) {
+    if (numericLevel >= 2) { return 'error'; }
+    if (numericLevel >= 1) { return 'warning'; }
+  }
+
+  if ((notification.errorCode ?? 0) > 0) { return 'error'; }
+  return 'info';
+}
+
+function renderIssues(errors: CallNotification[], warnings: CallNotification[]): string {
+  return `
+    <div class="detail-section">
+      <h3 class="detail-section-title">Errors <span class="count-badge">${errors.length}</span></h3>
+      ${errors.length === 0
+        ? '<p class="muted small">No errors reported for this call.</p>'
+        : errors.map(n => renderIssue(n, 'error')).join('')
+      }
+
+      <h3 class="detail-section-title" style="margin-top: 14px;">Warnings <span class="count-badge">${warnings.length}</span></h3>
+      ${warnings.length === 0
+        ? '<p class="muted small">No warnings reported for this call.</p>'
+        : warnings.map(n => renderIssue(n, 'warning')).join('')
+      }
+    </div>
+  `;
+}
+
+function renderIssue(notification: CallNotification, severity: 'error' | 'warning'): string {
+  const sevClass = severity === 'error' ? 'badge-red' : 'badge-neutral';
+  const title = notification.messageText?.trim() || 'Notification';
+  const code = notification.errorCode ? `Code ${notification.errorCode}` : '';
+  const timestamp = notification.messageDate ? fmtDate(notification.messageDate) : '';
+  const requestUrl = notification.requestUrl?.trim();
+  const moreInfo = notification.moreInfo?.trim();
+
+  return `
+    <div class="issue-card">
+      <div class="issue-header">
+        <span class="badge ${sevClass}">${severity.toUpperCase()}</span>
+        ${code ? `<span class="muted small mono">${esc(code)}</span>` : ''}
+        ${timestamp ? `<span class="muted small">${esc(timestamp)}</span>` : ''}
+      </div>
+      <div class="issue-message">${esc(title)}</div>
+      ${requestUrl
+        ? `<div class="issue-url mono muted"><a href="${esc(requestUrl)}" target="_blank" rel="noopener noreferrer">${esc(requestUrl)}</a></div>`
+        : ''}
+      ${moreInfo
+        ? `<div class="issue-url mono muted"><a href="${esc(moreInfo)}" target="_blank" rel="noopener noreferrer">${esc(moreInfo)}</a></div>`
+        : ''}
     </div>
   `;
 }
@@ -616,6 +724,7 @@ function attachHandlers(): void {
     selectedCall = null;
     callRecordings = [];
     callEvents = [];
+    callNotifications = [];
     renderAll();
   });
 
@@ -648,6 +757,7 @@ function openCallDetail(callSid: string): void {
   selectedCall = null;
   callRecordings = [];
   callEvents = [];
+  callNotifications = [];
   renderAll();
   post({ type: 'loadCallDetail', callSid });
 }
@@ -691,6 +801,7 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebviewMessag
       selectedCall        = msg.detail;
       callRecordings      = msg.recordings;
       callEvents          = msg.events;
+      callNotifications   = msg.notifications;
       callDetailLoading   = false;
       callDetailPanelOpen = true;
       renderAll();
@@ -897,6 +1008,12 @@ function injectStyles(): void {
     .param-value { word-break: break-all; }
     .response-status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .response-body { margin: 0; font-size: 0.78em; font-family: var(--vscode-editor-font-family); white-space: pre-wrap; word-break: break-all; max-height: 160px; overflow-y: auto; color: var(--vscode-foreground); }
+
+    /* Issues */
+    .issue-card { background: var(--vscode-list-hoverBackground); border-radius: 4px; padding: 10px 12px; margin-bottom: 8px; }
+    .issue-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .issue-message { font-size: 0.86em; }
+    .issue-url { font-size: 0.75em; margin-top: 4px; word-break: break-all; }
 
     /* Misc */
     .mono { font-family: var(--vscode-editor-font-family); }

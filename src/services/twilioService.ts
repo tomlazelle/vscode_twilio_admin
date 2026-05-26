@@ -8,6 +8,7 @@ import type {
   CallRecording,
   CallEvent,
   CallEventParameter,
+  CallNotification,
   MessageLogEntry,
 } from '../types/models.js';
 import type { SubaccountService } from './subaccountService.js';
@@ -238,6 +239,9 @@ export class TwilioService {
         callerName: c.callerName || undefined,
         forwardedFrom: c.forwardedFrom || undefined,
         parentCallSid: c.parentCallSid || undefined,
+        queueTime: c.queueTime || undefined,
+        errorCode: c.errorCode || undefined,
+        errorMessage: c.errorMessage || undefined,
       };
     } catch (err) {
       throw this.wrapError(err);
@@ -336,6 +340,33 @@ export class TwilioService {
           responseContent,
         };
       });
+    } catch (err) {
+      throw this.wrapError(err);
+    }
+  }
+
+  async getCallNotifications(
+    subaccountId: string,
+    callSid: string,
+    token?: vscode.CancellationToken
+  ): Promise<CallNotification[]> {
+    const client = await this.createClient(subaccountId);
+    this.checkCancelled(token);
+
+    try {
+      const notifications = await client.calls(callSid).notifications.list({ limit: 100 });
+      this.checkCancelled(token);
+
+      return notifications.map((n: Record<string, unknown>) => ({
+        sid: String(n['sid'] ?? ''),
+        // Twilio notification objects commonly use `log`; keep this in logLevel for UI filtering.
+        logLevel: String(n['logLevel'] ?? n['log_level'] ?? n['log'] ?? ''),
+        errorCode: Number(n['errorCode'] ?? n['error_code'] ?? 0) || undefined,
+        messageText: String(n['messageText'] ?? n['message_text'] ?? ''),
+        messageDate: String(n['messageDate'] ?? n['message_date'] ?? n['dateCreated'] ?? n['date_created'] ?? ''),
+        moreInfo: String(n['moreInfo'] ?? n['more_info'] ?? ''),
+        requestUrl: String(n['requestUrl'] ?? n['request_url'] ?? ''),
+      }));
     } catch (err) {
       throw this.wrapError(err);
     }

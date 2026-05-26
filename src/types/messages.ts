@@ -6,6 +6,7 @@ import type {
   CallDetail,
   CallRecording,
   CallEvent,
+  CallNotification,
   MessageLogEntry,
   UpdateWebhooksRequest,
 } from './models.js';
@@ -17,7 +18,7 @@ export type ExtensionToWebviewMessage =
   | { type: 'phoneDetailLoaded'; detail: PhoneNumberDetail }
   | { type: 'callLogsLoaded';    entries: CallLogEntry[] }
   | { type: 'smsLogsLoaded';     entries: MessageLogEntry[] }
-  | { type: 'callDetailLoaded';  detail: CallDetail; recordings: CallRecording[]; events: CallEvent[] }
+  | { type: 'callDetailLoaded';  detail: CallDetail; recordings: CallRecording[]; events: CallEvent[]; notifications: CallNotification[] }
   | { type: 'webhookSaved' }
   | { type: 'labelSaved' }
   | { type: 'tagsSaved' }
