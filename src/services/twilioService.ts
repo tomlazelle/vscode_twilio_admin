@@ -10,6 +10,7 @@ import type {
   CallEventParameter,
   CallNotification,
   MessageLogEntry,
+  LogPageResult,
 } from '../types/models.js';
 import type { SubaccountService } from './subaccountService.js';
 import type { Logger } from '../util/logger.js';
@@ -130,39 +131,43 @@ export class TwilioService {
     limit: number,
     token?: vscode.CancellationToken
   ): Promise<CallLogEntry[]> {
+    const page = await this.getCallLogsPage(subaccountId, phoneNumber, limit, undefined, token);
+    return page.entries;
+  }
+
+  async getCallLogsPage(
+    subaccountId: string,
+    phoneNumber: string,
+    pageSize: number,
+    nextPageUrls?: { to?: string; from?: string },
+    token?: vscode.CancellationToken
+  ): Promise<LogPageResult<CallLogEntry>> {
     const client = await this.createClient(subaccountId);
     this.checkCancelled(token);
 
     try {
-      const [toCalls, fromCalls] = await Promise.all([
-        client.calls.list({ to: phoneNumber, limit }),
-        client.calls.list({ from: phoneNumber, limit }),
+      const [toPage, fromPage] = await Promise.all([
+        this.fetchCallDirectionPage(client, phoneNumber, pageSize, 'to', nextPageUrls?.to),
+        this.fetchCallDirectionPage(client, phoneNumber, pageSize, 'from', nextPageUrls?.from),
       ]);
       this.checkCancelled(token);
 
-      const seen = new Set<string>();
-      const merged: CallLogEntry[] = [];
-      for (const c of [...toCalls, ...fromCalls]) {
-        if (seen.has(c.sid)) { continue; }
-        seen.add(c.sid);
-        merged.push({
-          sid: c.sid,
-          from: c.from,
-          to: c.to,
-          direction: c.direction,
-          status: c.status,
-          startTime: c.startTime?.toISOString(),
-          duration: c.duration ? parseInt(String(c.duration), 10) : undefined,
-        });
+      const callMap = new Map<string, CallLogEntry>();
+      for (const call of [...toPage.entries, ...fromPage.entries]) {
+        callMap.set(call.sid, call);
       }
 
-      return merged
-        .sort((a, b) => {
-          const ta = a.startTime ?? '';
-          const tb = b.startTime ?? '';
-          return tb.localeCompare(ta);
-        })
-        .slice(0, limit);
+      await this.collectTransferredCallLegs(client, Array.from(callMap.keys()), callMap, pageSize, token);
+
+      return {
+        entries: this.sortCallEntries(Array.from(callMap.values())),
+        hasMore: Boolean(toPage.nextPageUrl || fromPage.nextPageUrl),
+        nextPageUrls: {
+          to: toPage.nextPageUrl,
+          from: fromPage.nextPageUrl,
+        },
+        updatedAt: new Date().toISOString(),
+      };
     } catch (err) {
       throw this.wrapError(err);
     }
@@ -174,39 +179,40 @@ export class TwilioService {
     limit: number,
     token?: vscode.CancellationToken
   ): Promise<MessageLogEntry[]> {
+    const page = await this.getMessageLogsPage(subaccountId, phoneNumber, limit, undefined, token);
+    return page.entries;
+  }
+
+  async getMessageLogsPage(
+    subaccountId: string,
+    phoneNumber: string,
+    pageSize: number,
+    nextPageUrls?: { to?: string; from?: string },
+    token?: vscode.CancellationToken
+  ): Promise<LogPageResult<MessageLogEntry>> {
     const client = await this.createClient(subaccountId);
     this.checkCancelled(token);
 
     try {
-      const [toMsgs, fromMsgs] = await Promise.all([
-        client.messages.list({ to: phoneNumber, limit }),
-        client.messages.list({ from: phoneNumber, limit }),
+      const [toPage, fromPage] = await Promise.all([
+        this.fetchMessageDirectionPage(client, phoneNumber, pageSize, 'to', nextPageUrls?.to),
+        this.fetchMessageDirectionPage(client, phoneNumber, pageSize, 'from', nextPageUrls?.from),
       ]);
       this.checkCancelled(token);
 
-      const seen = new Set<string>();
-      const merged: MessageLogEntry[] = [];
-      for (const m of [...toMsgs, ...fromMsgs]) {
-        if (seen.has(m.sid)) { continue; }
-        seen.add(m.sid);
-        merged.push({
-          sid: m.sid,
-          from: m.from,
-          to: m.to,
-          direction: m.direction,
-          status: m.status,
-          dateSent: m.dateSent?.toISOString(),
-          body: m.body ? m.body.slice(0, 120) : undefined,
-        });
-      }
-
-      return merged
-        .sort((a, b) => {
-          const ta = a.dateSent ?? '';
-          const tb = b.dateSent ?? '';
-          return tb.localeCompare(ta);
-        })
-        .slice(0, limit);
+      const entries = this.sortMessageEntries([
+        ...toPage.entries,
+        ...fromPage.entries,
+      ]);
+      return {
+        entries,
+        hasMore: Boolean(toPage.nextPageUrl || fromPage.nextPageUrl),
+        nextPageUrls: {
+          to: toPage.nextPageUrl,
+          from: fromPage.nextPageUrl,
+        },
+        updatedAt: new Date().toISOString(),
+      };
     } catch (err) {
       throw this.wrapError(err);
     }
@@ -384,6 +390,149 @@ export class TwilioService {
 
   private normalizeMethod(method: string | undefined): 'GET' | 'POST' {
     return method?.toUpperCase() === 'GET' ? 'GET' : 'POST';
+  }
+
+  private mapCallEntry(c: {
+    sid: string;
+    from?: string;
+    to?: string;
+    direction?: string;
+    status?: string;
+    startTime?: Date | string | null;
+    duration?: number | string | null;
+  }): CallLogEntry {
+    return {
+      sid: c.sid,
+      from: c.from ?? '',
+      to: c.to ?? '',
+      direction: c.direction ?? '',
+      status: c.status ?? '',
+      startTime: c.startTime ? new Date(c.startTime).toISOString() : undefined,
+      duration: c.duration ? parseInt(String(c.duration), 10) : undefined,
+    };
+  }
+
+  private mapMessageEntry(m: {
+    sid: string;
+    from?: string;
+    to?: string;
+    direction?: string;
+    status?: string;
+    dateSent?: Date | string | null;
+    body?: string | null;
+  }): MessageLogEntry {
+    return {
+      sid: m.sid,
+      from: m.from ?? '',
+      to: m.to ?? '',
+      direction: m.direction ?? '',
+      status: m.status ?? '',
+      dateSent: m.dateSent ? new Date(m.dateSent).toISOString() : undefined,
+      body: m.body ? m.body.slice(0, 120) : undefined,
+    };
+  }
+
+  private async fetchCallDirectionPage(
+    client: Awaited<ReturnType<typeof this.createClient>>,
+    phoneNumber: string,
+    pageSize: number,
+    direction: 'to' | 'from',
+    pageUrl?: string
+  ): Promise<{ entries: CallLogEntry[]; nextPageUrl?: string }> {
+    const page = pageUrl
+      ? await client.calls.getPage(pageUrl)
+      : await client.calls.page({
+        [direction]: phoneNumber,
+        pageSize,
+      } as Parameters<typeof client.calls.page>[0]);
+
+    return {
+      entries: page.instances.map(call => this.mapCallEntry(call)),
+      nextPageUrl: page.nextPageUrl,
+    };
+  }
+
+  private async fetchMessageDirectionPage(
+    client: Awaited<ReturnType<typeof this.createClient>>,
+    phoneNumber: string,
+    pageSize: number,
+    direction: 'to' | 'from',
+    pageUrl?: string
+  ): Promise<{ entries: MessageLogEntry[]; nextPageUrl?: string }> {
+    const page = pageUrl
+      ? await client.messages.getPage(pageUrl)
+      : await client.messages.page({
+        [direction]: phoneNumber,
+        pageSize,
+      } as Parameters<typeof client.messages.page>[0]);
+
+    return {
+      entries: page.instances.map(message => this.mapMessageEntry(message)),
+      nextPageUrl: page.nextPageUrl,
+    };
+  }
+
+  private sortCallEntries(entries: CallLogEntry[]): CallLogEntry[] {
+    return entries.sort((left, right) => {
+      const leftTime = left.startTime ? new Date(left.startTime).getTime() : Number.NEGATIVE_INFINITY;
+      const rightTime = right.startTime ? new Date(right.startTime).getTime() : Number.NEGATIVE_INFINITY;
+      if (rightTime !== leftTime) {
+        return rightTime - leftTime;
+      }
+      return right.sid.localeCompare(left.sid);
+    });
+  }
+
+  private sortMessageEntries(entries: MessageLogEntry[]): MessageLogEntry[] {
+    return entries.sort((left, right) => {
+      const leftTime = left.dateSent ? new Date(left.dateSent).getTime() : Number.NEGATIVE_INFINITY;
+      const rightTime = right.dateSent ? new Date(right.dateSent).getTime() : Number.NEGATIVE_INFINITY;
+      if (rightTime !== leftTime) {
+        return rightTime - leftTime;
+      }
+      return right.sid.localeCompare(left.sid);
+    });
+  }
+
+  private async collectTransferredCallLegs(
+    client: Awaited<ReturnType<typeof this.createClient>>,
+    parentSids: string[],
+    callMap: Map<string, CallLogEntry>,
+    pageSize: number,
+    token?: vscode.CancellationToken
+  ): Promise<void> {
+    const visitedParents = new Set<string>();
+    const queue = [...parentSids];
+
+    while (queue.length > 0) {
+      this.checkCancelled(token);
+      const parentSid = queue.shift();
+      if (!parentSid || visitedParents.has(parentSid)) {
+        continue;
+      }
+      visitedParents.add(parentSid);
+
+      let page = await client.calls.page({ parentCallSid: parentSid, pageSize });
+      while (true) {
+        this.checkCancelled(token);
+        for (const call of page.instances) {
+          if (callMap.has(call.sid)) {
+            continue;
+          }
+          const entry = this.mapCallEntry(call);
+          callMap.set(entry.sid, entry);
+          queue.push(entry.sid);
+        }
+        if (!page.nextPageUrl) {
+          break;
+        }
+        const nextPage = await page.nextPage();
+        if (!nextPage) {
+          break;
+        }
+        page = nextPage;
+      }
+    }
   }
 
   private checkCancelled(token?: vscode.CancellationToken): void {

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { FileStore } from '../../src/store/fileStore.js';
 import { makeTempStorageUri, Uri } from '../__mocks__/vscode.js';
-import type { SubaccountRecord, BookmarkRecord } from '../../src/types/models.js';
+import type { SubaccountRecord, BookmarkRecord, CallLogEntry, LogHistoryRecord } from '../../src/types/models.js';
 
 function makeStorage(): { store: FileStore; dir: string } {
   const uri = makeTempStorageUri();
@@ -152,6 +152,42 @@ describe('FileStore', () => {
       await store.writeCacheEntry('message-logs', 'acc:+15005550001', data);
       const read = await store.readCacheEntry('message-logs', 'acc:+15005550001', 300);
       expect(read).toEqual(data);
+    });
+  });
+
+  describe('log history', () => {
+    it('round-trips call log history records', async () => {
+      const { store } = makeStorage();
+      const record: LogHistoryRecord<CallLogEntry> = {
+        version: 1,
+        kind: 'call-logs',
+        key: 'sub-1:+15005550001',
+        entries: [{ sid: 'CA001', from: '+1', to: '+2', direction: 'inbound', status: 'completed' }],
+        hasMore: true,
+        nextPageUrls: { to: 'https://example.test/to', from: 'https://example.test/from' },
+        updatedAt: new Date().toISOString(),
+      };
+
+      await store.writeLogHistory('call-logs', record.key, record);
+      const read = await store.readLogHistory<CallLogEntry>('call-logs', record.key);
+      expect(read).toEqual(record);
+    });
+
+    it('clears log history records', async () => {
+      const { store } = makeStorage();
+      const key = 'sub-1:+15005550001';
+      await store.writeLogHistory('message-logs', key, {
+        version: 1,
+        kind: 'message-logs',
+        key,
+        entries: [{ sid: 'SM001' }],
+        hasMore: false,
+        updatedAt: new Date().toISOString(),
+      });
+
+      await store.clearLogHistory('message-logs', key);
+      const read = await store.readLogHistory('message-logs', key);
+      expect(read).toBeNull();
     });
   });
 

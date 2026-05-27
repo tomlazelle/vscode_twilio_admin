@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { generateNonce } from '../util/nonce.js';
 import type { ServiceContainer } from '../types/models.js';
+import { resolveUiTypographySettings } from '../util/uiTypographySettings.js';
 
 const IncomingMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready') }),
@@ -23,6 +24,10 @@ export class AccountFormPanel {
   private readonly _panel: vscode.WebviewPanel;
   private readonly _disposables: vscode.Disposable[] = [];
   private _onSaved?: () => void;
+
+  static refreshCurrentTypography(): void {
+    AccountFormPanel.currentPanel?._sendTypographySettings();
+  }
 
   static createOrShow(
     extensionUri: vscode.Uri,
@@ -99,6 +104,8 @@ export class AccountFormPanel {
   }
 
   private async _sendInit(): Promise<void> {
+    this._sendTypographySettings();
+
     if (this.opts.mode === 'add') {
       void this._panel.webview.postMessage({
         type: 'init',
@@ -179,6 +186,13 @@ export class AccountFormPanel {
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+  }
+
+  private _sendTypographySettings(): void {
+    void this._panel.webview.postMessage({
+      type: 'uiTypographySettings',
+      settings: resolveUiTypographySettings(),
+    });
   }
 
   dispose(): void {

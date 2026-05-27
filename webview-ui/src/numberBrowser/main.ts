@@ -1,5 +1,6 @@
 import type { ExtensionToWebviewMessage } from '../../../src/types/messages.js';
 import type { PhoneNumberSummary } from '../../../src/types/models.js';
+import type { NumberBrowserTypographySettings } from '../../../src/types/typography.js';
 
 declare function acquireVsCodeApi(): {
   postMessage(msg: unknown): void;
@@ -15,6 +16,13 @@ let allNumbers: PhoneNumberSummary[] = [];
 let bookmarkedSids: Record<string, string> = {};
 let filterText = '';
 let isLoading = true;
+let typography: NumberBrowserTypographySettings = {
+  header: 0,
+  filters: 0,
+  tableHeaders: 0,
+  tableRows: 0,
+  metaText: 0,
+};
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -52,6 +60,15 @@ function highlight(text: string, norm: string): string {
     `<mark>${esc(text.slice(idx, idx + norm.length))}</mark>` +
     esc(text.slice(idx + norm.length))
   );
+}
+
+function applyTypographySettings(): void {
+  const root = document.documentElement;
+  root.style.setProperty('--tw-number-header-size', `${typography.header}px`);
+  root.style.setProperty('--tw-number-filters-size', `${typography.filters}px`);
+  root.style.setProperty('--tw-number-table-headers-size', `${typography.tableHeaders}px`);
+  root.style.setProperty('--tw-number-table-rows-size', `${typography.tableRows}px`);
+  root.style.setProperty('--tw-number-meta-size', `${typography.metaText}px`);
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -214,6 +231,14 @@ function showError(message: string): void {
 function injectStyles(): void {
   const style = document.createElement('style');
   style.textContent = `
+    :root {
+      --tw-number-header-size: var(--vscode-font-size);
+      --tw-number-filters-size: var(--vscode-font-size);
+      --tw-number-table-headers-size: var(--vscode-font-size);
+      --tw-number-table-rows-size: var(--vscode-font-size);
+      --tw-number-meta-size: var(--vscode-font-size);
+    }
+
     *, *::before, *::after { box-sizing: border-box; }
     body {
       font-family: var(--vscode-font-family);
@@ -231,6 +256,7 @@ function injectStyles(): void {
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
+      font-size: var(--tw-number-header-size);
       border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-editorWidget-border));
       background: var(--vscode-editor-background);
       position: sticky;
@@ -257,7 +283,7 @@ function injectStyles(): void {
       border: none;
       outline: none;
       color: var(--vscode-input-foreground);
-      font-size: inherit;
+      font-size: var(--tw-number-filters-size);
       font-family: inherit;
       padding: 5px 0;
     }
@@ -275,7 +301,7 @@ function injectStyles(): void {
     }
     .filter-clear:hover { color: var(--vscode-foreground); }
     .result-count {
-      font-size: 0.8em;
+      font-size: var(--tw-number-meta-size);
       color: var(--vscode-descriptionForeground);
       white-space: nowrap;
     }
@@ -299,7 +325,7 @@ function injectStyles(): void {
       top: 0;
       background: var(--vscode-editor-background);
       text-align: left;
-      font-size: 0.8em;
+      font-size: var(--tw-number-table-headers-size);
       font-weight: 600;
       color: var(--vscode-descriptionForeground);
       padding: 6px 12px;
@@ -308,9 +334,9 @@ function injectStyles(): void {
     }
     tbody tr { border-bottom: 1px solid var(--vscode-list-hoverBackground); }
     tbody tr:hover { background: var(--vscode-list-hoverBackground); }
-    td { padding: 7px 12px; vertical-align: middle; }
+    td { padding: 7px 12px; vertical-align: middle; font-size: var(--tw-number-table-rows-size); }
     .col-number { white-space: nowrap; }
-    .col-caps { font-size: 0.8em; color: var(--vscode-descriptionForeground); }
+    .col-caps { font-size: var(--tw-number-meta-size); color: var(--vscode-descriptionForeground); }
     .col-action { text-align: right; white-space: nowrap; }
     .number-text { font-family: var(--vscode-editor-font-family); }
     mark {
@@ -323,7 +349,7 @@ function injectStyles(): void {
     /* Buttons and badges */
     .btn-bookmark {
       padding: 3px 10px;
-      font-size: 0.85em;
+      font-size: var(--tw-number-filters-size);
       font-family: inherit;
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
@@ -334,7 +360,7 @@ function injectStyles(): void {
     .btn-bookmark:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
     .btn-bookmark:disabled { opacity: 0.6; cursor: default; }
     .badge-bookmarked {
-      font-size: 0.8em;
+      font-size: var(--tw-number-meta-size);
       color: var(--vscode-descriptionForeground);
       font-style: italic;
     }
@@ -344,6 +370,7 @@ function injectStyles(): void {
       padding: 32px;
       text-align: center;
       color: var(--vscode-descriptionForeground);
+      font-size: var(--tw-number-meta-size);
     }
     .error-banner {
       margin: 24px;
@@ -362,6 +389,11 @@ function injectStyles(): void {
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebviewMessage>) => {
   const msg = event.data;
   switch (msg.type) {
+    case 'uiTypographySettings':
+      typography = msg.settings.numberBrowser;
+      applyTypographySettings();
+      break;
+
     case 'numbersLoaded':
       allNumbers     = msg.numbers;
       bookmarkedSids = msg.bookmarkedSids;
@@ -410,3 +442,4 @@ renderShell();
 showLoading();
 
 vscode.postMessage({ type: 'ready' });
+

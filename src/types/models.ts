@@ -150,6 +150,29 @@ export interface MessageLogEntry {
   body?: string;
 }
 
+export interface LogPageResult<T> {
+  entries: T[];
+  hasMore: boolean;
+  nextPageUrls?: {
+    to?: string;
+    from?: string;
+  };
+  updatedAt: string;
+}
+
+export interface LogHistoryRecord<T> {
+  version: 1;
+  kind: 'call-logs' | 'message-logs';
+  key: string;
+  entries: T[];
+  hasMore: boolean;
+  nextPageUrls?: {
+    to?: string;
+    from?: string;
+  };
+  updatedAt: string;
+}
+
 // ── Cache ─────────────────────────────────────────────────────────────────────
 
 export interface CacheEntry<T = unknown> {

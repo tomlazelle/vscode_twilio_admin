@@ -14,6 +14,9 @@ import { registerAccountCommands } from './commands/accountCommands.js';
 import { registerBookmarkCommands } from './commands/bookmarkCommands.js';
 import { registerCredentialCommands } from './commands/credentialCommands.js';
 import type { ServiceContainer } from './types/models.js';
+import { BookmarkDetailPanel } from './panels/bookmarkDetailPanel.js';
+import { NumberBrowserPanel } from './panels/numberBrowserPanel.js';
+import { AccountFormPanel } from './panels/accountFormPanel.js';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   // 1. Run storage schema migrations (no-op for v1)
@@ -54,6 +57,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   registerAccountCommands(context, services, accountsTree, bookmarksTree, tagsTree);
   registerBookmarkCommands(context, services, bookmarksTree, tagsTree, context.extensionUri);
   registerCredentialCommands(context, services, accountsTree);
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(event => {
+      if (!event.affectsConfiguration('twilioAdmin.ui.fontSize')) {
+        return;
+      }
+
+      BookmarkDetailPanel.refreshCurrentTypography();
+      NumberBrowserPanel.refreshCurrentTypography();
+      AccountFormPanel.refreshCurrentTypography();
+    })
+  );
 
   // 6. Auto-unlock on startup
   const config = vscode.workspace.getConfiguration('twilioAdmin');

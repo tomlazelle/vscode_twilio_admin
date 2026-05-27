@@ -1,7 +1,12 @@
 import * as vscode from 'vscode';
-import type { CallLogEntry, MessageLogEntry } from '../types/models.js';
+import type { CallLogEntry, LogHistoryRecord, LogPageResult, MessageLogEntry } from '../types/models.js';
 import type { TwilioService } from './twilioService.js';
 import type { FileStore } from '../store/fileStore.js';
+
+interface GetLogsOptions {
+  forceRefresh?: boolean;
+  loadMore?: boolean;
+}
 
 export class LogsService {
   constructor(
@@ -12,56 +17,158 @@ export class LogsService {
   async getCallLogs(
     subaccountId: string,
     phoneNumber: string,
-    forceRefresh = false,
+    options: GetLogsOptions = {},
     token?: vscode.CancellationToken
-  ): Promise<CallLogEntry[]> {
+  ): Promise<LogPageResult<CallLogEntry>> {
     const config = vscode.workspace.getConfiguration('twilioAdmin');
-    const cacheEnabled = config.get<boolean>('cache.enabled') ?? true;
-    const ttl = config.get<number>('cache.ttlSeconds') ?? 120;
-    const limit = config.get<number>('logs.pageSize') ?? 50;
+    const pageSize = config.get<number>('logs.pageSize') ?? 50;
     const key = `${subaccountId}:${phoneNumber}`;
+    const forceRefresh = options.forceRefresh ?? false;
+    const loadMore = options.loadMore ?? false;
 
-    if (cacheEnabled && !forceRefresh) {
-      const cached = await this.fileStore.readCacheEntry<CallLogEntry[]>('call-logs', key, ttl);
-      if (cached) {
-        return cached;
-      }
+    if (forceRefresh) {
+      await this.fileStore.clearLogHistory('call-logs', key);
     }
 
-    const entries = await this.twilioService.getCallLogs(subaccountId, phoneNumber, limit, token);
+    const existing = await this.fileStore.readLogHistory<CallLogEntry>('call-logs', key);
 
-    if (cacheEnabled) {
-      await this.fileStore.writeCacheEntry('call-logs', key, entries);
+    if (!forceRefresh && existing && !loadMore) {
+      return {
+        entries: existing.entries,
+        hasMore: existing.hasMore,
+        nextPageUrls: existing.nextPageUrls,
+        updatedAt: existing.updatedAt,
+      };
     }
 
-    return entries;
+    if (loadMore && existing && !existing.hasMore) {
+      return {
+        entries: existing.entries,
+        hasMore: existing.hasMore,
+        nextPageUrls: existing.nextPageUrls,
+        updatedAt: existing.updatedAt,
+      };
+    }
+
+    const page = await this.twilioService.getCallLogsPage(
+      subaccountId,
+      phoneNumber,
+      pageSize,
+      loadMore ? existing?.nextPageUrls : undefined,
+      token
+    );
+    const mergedEntries = this.sortCallLogs([...(forceRefresh ? [] : (existing?.entries ?? [])), ...page.entries]);
+    const record: LogHistoryRecord<CallLogEntry> = {
+      version: 1,
+      kind: 'call-logs',
+      key,
+      entries: mergedEntries,
+      hasMore: page.hasMore,
+      nextPageUrls: page.nextPageUrls,
+      updatedAt: page.updatedAt,
+    };
+
+    await this.fileStore.writeLogHistory('call-logs', key, record);
+
+    return {
+      entries: record.entries,
+      hasMore: record.hasMore,
+      nextPageUrls: record.nextPageUrls,
+      updatedAt: record.updatedAt,
+    };
   }
 
   async getMessageLogs(
     subaccountId: string,
     phoneNumber: string,
-    forceRefresh = false,
+    options: GetLogsOptions = {},
     token?: vscode.CancellationToken
-  ): Promise<MessageLogEntry[]> {
+  ): Promise<LogPageResult<MessageLogEntry>> {
     const config = vscode.workspace.getConfiguration('twilioAdmin');
-    const cacheEnabled = config.get<boolean>('cache.enabled') ?? true;
-    const ttl = config.get<number>('cache.ttlSeconds') ?? 120;
-    const limit = config.get<number>('logs.pageSize') ?? 50;
+    const pageSize = config.get<number>('logs.pageSize') ?? 50;
     const key = `${subaccountId}:${phoneNumber}`;
+    const forceRefresh = options.forceRefresh ?? false;
+    const loadMore = options.loadMore ?? false;
 
-    if (cacheEnabled && !forceRefresh) {
-      const cached = await this.fileStore.readCacheEntry<MessageLogEntry[]>('message-logs', key, ttl);
-      if (cached) {
-        return cached;
+    if (forceRefresh) {
+      await this.fileStore.clearLogHistory('message-logs', key);
+    }
+
+    const existing = await this.fileStore.readLogHistory<MessageLogEntry>('message-logs', key);
+
+    if (!forceRefresh && existing && !loadMore) {
+      return {
+        entries: existing.entries,
+        hasMore: existing.hasMore,
+        nextPageUrls: existing.nextPageUrls,
+        updatedAt: existing.updatedAt,
+      };
+    }
+
+    if (loadMore && existing && !existing.hasMore) {
+      return {
+        entries: existing.entries,
+        hasMore: existing.hasMore,
+        nextPageUrls: existing.nextPageUrls,
+        updatedAt: existing.updatedAt,
+      };
+    }
+
+    const page = await this.twilioService.getMessageLogsPage(
+      subaccountId,
+      phoneNumber,
+      pageSize,
+      loadMore ? existing?.nextPageUrls : undefined,
+      token
+    );
+    const mergedEntries = this.sortMessageLogs([...(forceRefresh ? [] : (existing?.entries ?? [])), ...page.entries]);
+    const record: LogHistoryRecord<MessageLogEntry> = {
+      version: 1,
+      kind: 'message-logs',
+      key,
+      entries: mergedEntries,
+      hasMore: page.hasMore,
+      nextPageUrls: page.nextPageUrls,
+      updatedAt: page.updatedAt,
+    };
+
+    await this.fileStore.writeLogHistory('message-logs', key, record);
+
+    return {
+      entries: record.entries,
+      hasMore: record.hasMore,
+      nextPageUrls: record.nextPageUrls,
+      updatedAt: record.updatedAt,
+    };
+  }
+
+  private sortCallLogs(entries: CallLogEntry[]): CallLogEntry[] {
+    const deduped = new Map<string, CallLogEntry>();
+    for (const entry of entries) {
+      deduped.set(entry.sid, entry);
+    }
+    return Array.from(deduped.values()).sort((left, right) => {
+      const leftTime = left.startTime ? new Date(left.startTime).getTime() : Number.NEGATIVE_INFINITY;
+      const rightTime = right.startTime ? new Date(right.startTime).getTime() : Number.NEGATIVE_INFINITY;
+      if (rightTime !== leftTime) {
+        return rightTime - leftTime;
       }
+      return right.sid.localeCompare(left.sid);
+    });
+  }
+
+  private sortMessageLogs(entries: MessageLogEntry[]): MessageLogEntry[] {
+    const deduped = new Map<string, MessageLogEntry>();
+    for (const entry of entries) {
+      deduped.set(entry.sid, entry);
     }
-
-    const entries = await this.twilioService.getMessageLogs(subaccountId, phoneNumber, limit, token);
-
-    if (cacheEnabled) {
-      await this.fileStore.writeCacheEntry('message-logs', key, entries);
-    }
-
-    return entries;
+    return Array.from(deduped.values()).sort((left, right) => {
+      const leftTime = left.dateSent ? new Date(left.dateSent).getTime() : Number.NEGATIVE_INFINITY;
+      const rightTime = right.dateSent ? new Date(right.dateSent).getTime() : Number.NEGATIVE_INFINITY;
+      if (rightTime !== leftTime) {
+        return rightTime - leftTime;
+      }
+      return right.sid.localeCompare(left.sid);
+    });
   }
 }

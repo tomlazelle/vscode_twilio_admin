@@ -1,3 +1,5 @@
+import type { UiTypographySettings } from '../../../src/types/typography.js';
+
 declare function acquireVsCodeApi(): {
   postMessage(msg: unknown): void;
   getState(): unknown;
@@ -14,6 +16,7 @@ interface AccountFormData {
 
 type IncomingMessage =
   | { type: 'init'; data: AccountFormData }
+  | { type: 'uiTypographySettings'; settings: UiTypographySettings }
   | { type: 'validationError'; field: string; message: string }
   | { type: 'saved' }
   | { type: 'error'; message: string };
@@ -22,6 +25,13 @@ const vscode = acquireVsCodeApi();
 
 let mode: 'add' | 'edit' = 'add';
 let accountId: string | undefined;
+let typography = {
+  header: 0,
+  labels: 0,
+  inputs: 0,
+  helpText: 0,
+  buttons: 0,
+};
 
 function esc(s: string): string {
   return s
@@ -29,6 +39,15 @@ function esc(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function applyTypographySettings(): void {
+  const root = document.documentElement;
+  root.style.setProperty('--tw-account-header-size', `${typography.header}px`);
+  root.style.setProperty('--tw-account-labels-size', `${typography.labels}px`);
+  root.style.setProperty('--tw-account-inputs-size', `${typography.inputs}px`);
+  root.style.setProperty('--tw-account-help-size', `${typography.helpText}px`);
+  root.style.setProperty('--tw-account-buttons-size', `${typography.buttons}px`);
 }
 
 function setFieldError(field: string, message: string): void {
@@ -155,6 +174,14 @@ function render(data: AccountFormData): void {
 function injectStyles(): void {
   const style = document.createElement('style');
   style.textContent = `
+    :root {
+      --tw-account-header-size: var(--vscode-font-size);
+      --tw-account-labels-size: var(--vscode-font-size);
+      --tw-account-inputs-size: var(--vscode-font-size);
+      --tw-account-help-size: var(--vscode-font-size);
+      --tw-account-buttons-size: var(--vscode-font-size);
+    }
+
     *, *::before, *::after { box-sizing: border-box; }
     body {
       font-family: var(--vscode-font-family);
@@ -165,10 +192,10 @@ function injectStyles(): void {
       padding: 0;
     }
     .container { max-width: 480px; margin: 32px auto; padding: 0 24px 48px; }
-    h1 { font-size: 1.3em; font-weight: 600; margin-bottom: 24px; }
+    h1 { font-size: var(--tw-account-header-size); font-weight: 600; margin-bottom: 24px; }
     .field { display: flex; flex-direction: column; margin-bottom: 16px; }
     label {
-      font-size: 0.85em;
+      font-size: var(--tw-account-labels-size);
       font-weight: 600;
       margin-bottom: 4px;
       color: var(--vscode-foreground);
@@ -179,7 +206,7 @@ function injectStyles(): void {
       color: var(--vscode-input-foreground);
       border: 1px solid var(--vscode-input-border, transparent);
       padding: 6px 8px;
-      font-size: inherit;
+      font-size: var(--tw-account-inputs-size);
       font-family: inherit;
       outline: none;
       border-radius: 2px;
@@ -192,7 +219,7 @@ function injectStyles(): void {
       border-color: var(--vscode-inputValidation-errorBorder);
     }
     .hint {
-      font-size: 0.8em;
+      font-size: var(--tw-account-help-size);
       color: var(--vscode-descriptionForeground);
       margin: 4px 0 0;
     }
@@ -203,7 +230,7 @@ function injectStyles(): void {
       border-radius: 2px;
     }
     .field-error {
-      font-size: 0.8em;
+      font-size: var(--tw-account-help-size);
       color: var(--vscode-inputValidation-errorForeground, #f48771);
       margin-top: 4px;
     }
@@ -213,13 +240,13 @@ function injectStyles(): void {
       background: var(--vscode-inputValidation-errorBackground);
       border: 1px solid var(--vscode-inputValidation-errorBorder);
       color: var(--vscode-inputValidation-errorForeground);
-      font-size: 0.85em;
+      font-size: var(--tw-account-help-size);
       border-radius: 2px;
     }
     .actions { display: flex; gap: 8px; margin-top: 24px; }
     button {
       padding: 6px 16px;
-      font-size: inherit;
+      font-size: var(--tw-account-buttons-size);
       font-family: inherit;
       cursor: pointer;
       border-radius: 2px;
@@ -258,6 +285,10 @@ window.addEventListener('message', (event: MessageEvent<IncomingMessage>) => {
     case 'init':
       render(msg.data);
       break;
+    case 'uiTypographySettings':
+      typography = msg.settings.accountForm;
+      applyTypographySettings();
+      break;
     case 'validationError':
       setSaving(false);
       setFieldError(msg.field, msg.message);
@@ -273,3 +304,4 @@ window.addEventListener('message', (event: MessageEvent<IncomingMessage>) => {
 });
 
 vscode.postMessage({ type: 'ready' });
+
