@@ -20,7 +20,9 @@ const IncomingMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('updateTags'),  tags: z.array(z.string()) }),
   z.object({ type: z.literal('saveWebhooks'), request: UpdateWebhooksSchema }),
   z.object({ type: z.literal('loadCallLogs') }),
+  z.object({ type: z.literal('refreshCallLogs') }),
   z.object({ type: z.literal('loadSmsLogs') }),
+  z.object({ type: z.literal('refreshSmsLogs') }),
   z.object({ type: z.literal('loadCallDetail'), callSid: z.string() }),
   z.object({ type: z.literal('playRecording'), recordingSid: z.string(), accountSid: z.string().optional() }),
 ]);
@@ -168,11 +170,41 @@ export class BookmarkDetailPanel {
         break;
       }
 
+      case 'refreshCallLogs': {
+        try {
+          const entries = await this.services.logsService.getCallLogs(
+            bookmark.subaccountId,
+            bookmark.phoneNumber,
+            true
+          );
+          this._postMessage({ type: 'callLogsLoaded', entries });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this._postMessage({ type: 'error', message, context: 'callLogs' });
+        }
+        break;
+      }
+
       case 'loadSmsLogs': {
         try {
           const entries = await this.services.logsService.getMessageLogs(
             bookmark.subaccountId,
             bookmark.phoneNumber
+          );
+          this._postMessage({ type: 'smsLogsLoaded', entries });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this._postMessage({ type: 'error', message, context: 'smsLogs' });
+        }
+        break;
+      }
+
+      case 'refreshSmsLogs': {
+        try {
+          const entries = await this.services.logsService.getMessageLogs(
+            bookmark.subaccountId,
+            bookmark.phoneNumber,
+            true
           );
           this._postMessage({ type: 'smsLogsLoaded', entries });
         } catch (err) {

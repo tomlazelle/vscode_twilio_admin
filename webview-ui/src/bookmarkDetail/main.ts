@@ -131,6 +131,7 @@ function renderAll(): void {
         ${renderTags()}
         ${renderWebhooks()}
         ${renderTabs()}
+        ${renderLogsToolbar()}
         ${renderLogsPane()}
       </div>
       <div class="detail-col ${callDetailPanelOpen ? 'open' : ''}">
@@ -283,6 +284,22 @@ function renderTabs(): string {
     <div class="tabs">
       <button class="tab ${activeTab === 'calls' ? 'active' : ''}" data-tab="calls">Call Logs</button>
       <button class="tab ${activeTab === 'sms'   ? 'active' : ''}" data-tab="sms">SMS Logs</button>
+    </div>
+  `;
+}
+
+function renderLogsToolbar(): string {
+  const isCalls = activeTab === 'calls';
+  const isLoaded = isCalls ? callLogsLoaded : smsLogsLoaded;
+  const isLoading = isCalls ? callLogsLoading : smsLogsLoading;
+  if (!isLoaded) {
+    return '';
+  }
+
+  const label = isCalls ? 'Refresh Call Logs' : 'Refresh SMS Logs';
+  return `
+    <div class="logs-toolbar">
+      <button id="refresh-logs-btn" class="btn-small" ${isLoading ? 'disabled' : ''}>${label}</button>
     </div>
   `;
 }
@@ -568,15 +585,54 @@ function renderRecording(r: CallRecording): string {
 // ── Render: events ────────────────────────────────────────────────────────────
 
 function renderEvents(): string {
+  const canCopyAll = Boolean(selectedCall) && callEvents.length > 0;
   return `
     <div class="detail-section">
-      <h3 class="detail-section-title">Events <span class="count-badge">${callEvents.length}</span></h3>
+      <div class="detail-section-header">
+        <h3 class="detail-section-title">Events <span class="count-badge">${callEvents.length}</span></h3>
+        ${canCopyAll ? '<button id="copy-all-events-btn" class="btn-small" title="Copy all request/response data as JSON">Copy All</button>' : ''}
+      </div>
       ${callEvents.length === 0
         ? '<p class="muted small">No events for this call.</p>'
         : callEvents.map((e, i) => renderEvent(e, i + 1)).join('')
       }
     </div>
   `;
+}
+
+function buildEventsClipboardJson(): string {
+  const payload = {
+    callSid: selectedCall?.sid ?? null,
+    exportedAt: new Date().toISOString(),
+    eventCount: callEvents.length,
+    events: callEvents.map((e, i) => ({
+      index: i + 1,
+      requestMethod: e.requestMethod ?? null,
+      requestUrl: e.requestUrl ?? null,
+      requestParameters: e.requestParameters,
+      responseStatusCode: e.responseStatusCode ?? null,
+      responseContent: e.responseContent ?? null,
+    })),
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
+async function copyAllEventsToClipboard(): Promise<void> {
+  if (!selectedCall || callEvents.length === 0) {
+    showToast('No event data available to copy.', true);
+    return;
+  }
+  if (!navigator.clipboard?.writeText) {
+    showToast('Clipboard access is unavailable in this environment.', true);
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(buildEventsClipboardJson());
+    showToast('Copied all request/response data to clipboard.');
+  } catch {
+    showToast('Failed to copy request/response data to clipboard.', true);
+  }
 }
 
 function renderEvent(e: CallEvent, index: number): string {
@@ -709,6 +765,10 @@ function attachHandlers(): void {
   // Load buttons
   document.getElementById('load-calls-btn')?.addEventListener('click', startLoadCallLogs);
   document.getElementById('load-sms-btn')?.addEventListener('click', startLoadSmsLogs);
+  document.getElementById('refresh-logs-btn')?.addEventListener('click', startRefreshActiveLogs);
+  document.getElementById('copy-all-events-btn')?.addEventListener('click', () => {
+    void copyAllEventsToClipboard();
+  });
 
   // Call log rows
   document.querySelectorAll<HTMLTableRowElement>('.log-row[data-sid]').forEach(row => {
@@ -749,6 +809,21 @@ function startLoadSmsLogs(): void {
   smsLogsLoading = true;
   renderAll();
   post({ type: 'loadSmsLogs' });
+}
+
+function startRefreshActiveLogs(): void {
+  if (activeTab === 'calls') {
+    if (!callLogsLoaded || callLogsLoading) { return; }
+    callLogsLoading = true;
+    renderAll();
+    post({ type: 'refreshCallLogs' });
+    return;
+  }
+
+  if (!smsLogsLoaded || smsLogsLoading) { return; }
+  smsLogsLoading = true;
+  renderAll();
+  post({ type: 'refreshSmsLogs' });
 }
 
 function openCallDetail(callSid: string): void {
@@ -941,6 +1016,7 @@ function injectStyles(): void {
     .tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 16px; font-size: 0.9em; font-family: inherit; cursor: pointer; color: var(--vscode-descriptionForeground); margin-bottom: -1px; }
     .tab.active { color: var(--vscode-foreground); border-bottom-color: var(--vscode-focusBorder); }
     .tab:hover:not(.active) { color: var(--vscode-foreground); }
+    .logs-toolbar { display: flex; justify-content: flex-end; padding: 10px 20px 0; }
 
     /* Tables */
     .table-wrap { overflow-x: auto; }
@@ -986,6 +1062,7 @@ function injectStyles(): void {
     .field-value { font-size: 0.9em; word-break: break-all; }
 
     .detail-section { border-top: 1px solid var(--vscode-panel-border); padding-top: 14px; }
+    .detail-section-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
     .detail-section-title { font-size: 0.8em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); margin: 0 0 10px; }
 
     /* Recordings */
