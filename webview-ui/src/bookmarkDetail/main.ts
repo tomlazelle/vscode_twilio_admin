@@ -34,6 +34,8 @@ let callLogsLoading = false;
 let smsLogsLoading = false;
 let callLogsHasMore = false;
 let smsLogsHasMore = false;
+let callLogsHasMoreBeforeRefresh = false;
+let smsLogsHasMoreBeforeRefresh = false;
 
 // Call detail panel
 let selectedCall: CallDetail | null = null;
@@ -852,6 +854,7 @@ function startLoadMoreActiveLogs(): void {
 function startRefreshActiveLogs(): void {
   if (activeTab === 'calls') {
     if (!callLogsLoaded || callLogsLoading) { return; }
+    callLogsHasMoreBeforeRefresh = callLogsHasMore;
     callLogsHasMore = false;
     callLogsLoading = true;
     renderAll();
@@ -860,6 +863,7 @@ function startRefreshActiveLogs(): void {
   }
 
   if (!smsLogsLoaded || smsLogsLoading) { return; }
+  smsLogsHasMoreBeforeRefresh = smsLogsHasMore;
   smsLogsHasMore = false;
   smsLogsLoading = true;
   renderAll();
@@ -908,6 +912,7 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebviewMessag
       callLogsLoaded   = true;
       callLogsLoading  = false;
       callLogsHasMore  = msg.hasMore;
+      callLogsHasMoreBeforeRefresh = false;
       renderAll();
       break;
 
@@ -916,6 +921,7 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebviewMessag
       smsLogsLoaded   = true;
       smsLogsLoading  = false;
       smsLogsHasMore  = msg.hasMore;
+      smsLogsHasMoreBeforeRefresh = false;
       renderAll();
       break;
 
@@ -959,11 +965,23 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebviewMessag
 
     case 'error':
       showToast(msg.message, true);
-      // Reset saving states
-      webhookSaving    = false;
-      callLogsLoading  = false;
-      smsLogsLoading   = false;
-      callDetailLoading = false;
+      // Reset only the state that matches the failing operation.
+      if (!msg.context) {
+        webhookSaving = false;
+        callLogsLoading = false;
+        smsLogsLoading = false;
+        callDetailLoading = false;
+      } else if (msg.context === 'callLogs') {
+        callLogsLoading = false;
+        callLogsHasMore = callLogsHasMoreBeforeRefresh || callLogsHasMore;
+      } else if (msg.context === 'smsLogs') {
+        smsLogsLoading = false;
+        smsLogsHasMore = smsLogsHasMoreBeforeRefresh || smsLogsHasMore;
+      } else if (msg.context === 'callDetail') {
+        callDetailLoading = false;
+      } else if (msg.context === 'saveWebhooks') {
+        webhookSaving = false;
+      }
       renderAll();
       break;
 

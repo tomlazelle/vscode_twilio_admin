@@ -189,6 +189,24 @@ describe('FileStore', () => {
       const read = await store.readLogHistory('message-logs', key);
       expect(read).toBeNull();
     });
+
+    it('rejects malformed log entries and returns null', async () => {
+      const { store, dir } = makeStorage();
+      const key = 'sub-1:+15005550001';
+      const filePath = path.join(dir, 'twilio-admin', 'logs', 'call-logs', 'sub-1__15005550001.json');
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, JSON.stringify({
+        version: 1,
+        kind: 'call-logs',
+        key,
+        entries: [{ from: '+1', to: '+2', direction: 'inbound', status: 'completed' }],
+        hasMore: false,
+        updatedAt: new Date().toISOString(),
+      }));
+
+      const read = await store.readLogHistory('call-logs', key);
+      expect(read).toBeNull();
+    });
   });
 
   describe('atomic writes', () => {

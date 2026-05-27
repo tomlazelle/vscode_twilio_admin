@@ -14,6 +14,7 @@ import type {
 } from '../types/models.js';
 import type { SubaccountService } from './subaccountService.js';
 import type { Logger } from '../util/logger.js';
+import { sortByTimestampThenSid } from '../util/logEntrySorting.js';
 
 // Loaded lazily to avoid startup cost
 let twilioModule: typeof import('twilio') | undefined;
@@ -146,9 +147,10 @@ export class TwilioService {
     this.checkCancelled(token);
 
     try {
+      const allowInitialFetch = !nextPageUrls;
       const [toPage, fromPage] = await Promise.all([
-        this.fetchCallDirectionPage(client, phoneNumber, pageSize, 'to', nextPageUrls?.to),
-        this.fetchCallDirectionPage(client, phoneNumber, pageSize, 'from', nextPageUrls?.from),
+        this.fetchCallDirectionPage(client, phoneNumber, pageSize, 'to', nextPageUrls?.to, allowInitialFetch),
+        this.fetchCallDirectionPage(client, phoneNumber, pageSize, 'from', nextPageUrls?.from, allowInitialFetch),
       ]);
       this.checkCancelled(token);
 
@@ -160,7 +162,7 @@ export class TwilioService {
       await this.collectTransferredCallLegs(client, Array.from(callMap.keys()), callMap, pageSize, token);
 
       return {
-        entries: this.sortCallEntries(Array.from(callMap.values())),
+        entries: sortByTimestampThenSid(Array.from(callMap.values()), entry => entry.startTime),
         hasMore: Boolean(toPage.nextPageUrl || fromPage.nextPageUrl),
         nextPageUrls: {
           to: toPage.nextPageUrl,
@@ -194,16 +196,19 @@ export class TwilioService {
     this.checkCancelled(token);
 
     try {
+      const allowInitialFetch = !nextPageUrls;
       const [toPage, fromPage] = await Promise.all([
-        this.fetchMessageDirectionPage(client, phoneNumber, pageSize, 'to', nextPageUrls?.to),
-        this.fetchMessageDirectionPage(client, phoneNumber, pageSize, 'from', nextPageUrls?.from),
+        this.fetchMessageDirectionPage(client, phoneNumber, pageSize, 'to', nextPageUrls?.to, allowInitialFetch),
+        this.fetchMessageDirectionPage(client, phoneNumber, pageSize, 'from', nextPageUrls?.from, allowInitialFetch),
       ]);
       this.checkCancelled(token);
 
-      const entries = this.sortMessageEntries([
-        ...toPage.entries,
-        ...fromPage.entries,
-      ]);
+      const messageMap = new Map<string, MessageLogEntry>();
+      for (const message of [...toPage.entries, ...fromPage.entries]) {
+        messageMap.set(message.sid, message);
+      }
+
+      const entries = sortByTimestampThenSid(Array.from(messageMap.values()), entry => entry.dateSent);
       return {
         entries,
         hasMore: Boolean(toPage.nextPageUrl || fromPage.nextPageUrl),
@@ -437,8 +442,13 @@ export class TwilioService {
     phoneNumber: string,
     pageSize: number,
     direction: 'to' | 'from',
-    pageUrl?: string
+    pageUrl?: string,
+    allowInitialFetch = true
   ): Promise<{ entries: CallLogEntry[]; nextPageUrl?: string }> {
+    if (!pageUrl && !allowInitialFetch) {
+      return { entries: [], nextPageUrl: undefined };
+    }
+
     const page = pageUrl
       ? await client.calls.getPage(pageUrl)
       : await client.calls.page({
@@ -457,8 +467,13 @@ export class TwilioService {
     phoneNumber: string,
     pageSize: number,
     direction: 'to' | 'from',
-    pageUrl?: string
+    pageUrl?: string,
+    allowInitialFetch = true
   ): Promise<{ entries: MessageLogEntry[]; nextPageUrl?: string }> {
+    if (!pageUrl && !allowInitialFetch) {
+      return { entries: [], nextPageUrl: undefined };
+    }
+
     const page = pageUrl
       ? await client.messages.getPage(pageUrl)
       : await client.messages.page({
@@ -470,28 +485,6 @@ export class TwilioService {
       entries: page.instances.map(message => this.mapMessageEntry(message)),
       nextPageUrl: page.nextPageUrl,
     };
-  }
-
-  private sortCallEntries(entries: CallLogEntry[]): CallLogEntry[] {
-    return entries.sort((left, right) => {
-      const leftTime = left.startTime ? new Date(left.startTime).getTime() : Number.NEGATIVE_INFINITY;
-      const rightTime = right.startTime ? new Date(right.startTime).getTime() : Number.NEGATIVE_INFINITY;
-      if (rightTime !== leftTime) {
-        return rightTime - leftTime;
-      }
-      return right.sid.localeCompare(left.sid);
-    });
-  }
-
-  private sortMessageEntries(entries: MessageLogEntry[]): MessageLogEntry[] {
-    return entries.sort((left, right) => {
-      const leftTime = left.dateSent ? new Date(left.dateSent).getTime() : Number.NEGATIVE_INFINITY;
-      const rightTime = right.dateSent ? new Date(right.dateSent).getTime() : Number.NEGATIVE_INFINITY;
-      if (rightTime !== leftTime) {
-        return rightTime - leftTime;
-      }
-      return right.sid.localeCompare(left.sid);
-    });
   }
 
   private async collectTransferredCallLegs(

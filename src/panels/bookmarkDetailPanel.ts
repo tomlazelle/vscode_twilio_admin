@@ -92,7 +92,6 @@ export class BookmarkDetailPanel {
   private async _loadBookmark(bookmarkId: string, services: ServiceContainer): Promise<void> {
     this.bookmarkId = bookmarkId;
     this._panel.webview.html = this._getHtml(this._panel.webview);
-    await this._loadInitialData(services);
   }
 
   private async _loadInitialData(services: ServiceContainer): Promise<void> {
@@ -135,6 +134,7 @@ export class BookmarkDetailPanel {
 
     switch (msg.type) {
       case 'ready':
+        this._sendTypographySettings();
         await this._loadInitialData(this.services);
         break;
 

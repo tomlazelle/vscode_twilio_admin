@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { generateNonce } from '../util/nonce.js';
 import type { ServiceContainer } from '../types/models.js';
+import type { ExtensionToWebviewMessage } from '../types/messages.js';
 import { resolveUiTypographySettings } from '../util/uiTypographySettings.js';
 
 const IncomingMessageSchema = z.discriminatedUnion('type', [
@@ -189,10 +190,14 @@ export class AccountFormPanel {
   }
 
   private _sendTypographySettings(): void {
-    void this._panel.webview.postMessage({
+    this._postMessage({
       type: 'uiTypographySettings',
       settings: resolveUiTypographySettings(),
     });
+  }
+
+  private _postMessage(msg: ExtensionToWebviewMessage): void {
+    void this._panel.webview.postMessage(msg);
   }
 
   dispose(): void {

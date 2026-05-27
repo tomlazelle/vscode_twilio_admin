@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { CallLogEntry, LogHistoryRecord, LogPageResult, MessageLogEntry } from '../types/models.js';
 import type { TwilioService } from './twilioService.js';
 import type { FileStore } from '../store/fileStore.js';
+import { dedupeBySid, sortByTimestampThenSid } from '../util/logEntrySorting.js';
 
 interface GetLogsOptions {
   forceRefresh?: boolean;
@@ -9,6 +10,9 @@ interface GetLogsOptions {
 }
 
 export class LogsService {
+  private readonly runtimeCallHistory = new Map<string, LogHistoryRecord<CallLogEntry>>();
+  private readonly runtimeMessageHistory = new Map<string, LogHistoryRecord<MessageLogEntry>>();
+
   constructor(
     private readonly twilioService: TwilioService,
     private readonly fileStore: FileStore
@@ -25,12 +29,16 @@ export class LogsService {
     const key = `${subaccountId}:${phoneNumber}`;
     const forceRefresh = options.forceRefresh ?? false;
     const loadMore = options.loadMore ?? false;
+    const cacheConfig = this.getCacheConfig();
 
     if (forceRefresh) {
-      await this.fileStore.clearLogHistory('call-logs', key);
+      this.runtimeCallHistory.delete(key);
+      if (cacheConfig.enabled) {
+        await this.fileStore.clearLogHistory('call-logs', key);
+      }
     }
 
-    const existing = await this.fileStore.readLogHistory<CallLogEntry>('call-logs', key);
+    const existing = forceRefresh ? null : await this.readCallHistory(key, cacheConfig);
 
     if (!forceRefresh && existing && !loadMore) {
       return {
@@ -57,7 +65,10 @@ export class LogsService {
       loadMore ? existing?.nextPageUrls : undefined,
       token
     );
-    const mergedEntries = this.sortCallLogs([...(forceRefresh ? [] : (existing?.entries ?? [])), ...page.entries]);
+    const mergedEntries = sortByTimestampThenSid(
+      dedupeBySid([...(forceRefresh ? [] : (existing?.entries ?? [])), ...page.entries]),
+      entry => entry.startTime,
+    );
     const record: LogHistoryRecord<CallLogEntry> = {
       version: 1,
       kind: 'call-logs',
@@ -68,7 +79,10 @@ export class LogsService {
       updatedAt: page.updatedAt,
     };
 
-    await this.fileStore.writeLogHistory('call-logs', key, record);
+    this.runtimeCallHistory.set(key, record);
+    if (cacheConfig.enabled) {
+      await this.fileStore.writeLogHistory('call-logs', key, record);
+    }
 
     return {
       entries: record.entries,
@@ -89,12 +103,16 @@ export class LogsService {
     const key = `${subaccountId}:${phoneNumber}`;
     const forceRefresh = options.forceRefresh ?? false;
     const loadMore = options.loadMore ?? false;
+    const cacheConfig = this.getCacheConfig();
 
     if (forceRefresh) {
-      await this.fileStore.clearLogHistory('message-logs', key);
+      this.runtimeMessageHistory.delete(key);
+      if (cacheConfig.enabled) {
+        await this.fileStore.clearLogHistory('message-logs', key);
+      }
     }
 
-    const existing = await this.fileStore.readLogHistory<MessageLogEntry>('message-logs', key);
+    const existing = forceRefresh ? null : await this.readMessageHistory(key, cacheConfig);
 
     if (!forceRefresh && existing && !loadMore) {
       return {
@@ -121,7 +139,10 @@ export class LogsService {
       loadMore ? existing?.nextPageUrls : undefined,
       token
     );
-    const mergedEntries = this.sortMessageLogs([...(forceRefresh ? [] : (existing?.entries ?? [])), ...page.entries]);
+    const mergedEntries = sortByTimestampThenSid(
+      dedupeBySid([...(forceRefresh ? [] : (existing?.entries ?? [])), ...page.entries]),
+      entry => entry.dateSent,
+    );
     const record: LogHistoryRecord<MessageLogEntry> = {
       version: 1,
       kind: 'message-logs',
@@ -132,7 +153,10 @@ export class LogsService {
       updatedAt: page.updatedAt,
     };
 
-    await this.fileStore.writeLogHistory('message-logs', key, record);
+    this.runtimeMessageHistory.set(key, record);
+    if (cacheConfig.enabled) {
+      await this.fileStore.writeLogHistory('message-logs', key, record);
+    }
 
     return {
       entries: record.entries,
@@ -142,33 +166,61 @@ export class LogsService {
     };
   }
 
-  private sortCallLogs(entries: CallLogEntry[]): CallLogEntry[] {
-    const deduped = new Map<string, CallLogEntry>();
-    for (const entry of entries) {
-      deduped.set(entry.sid, entry);
-    }
-    return Array.from(deduped.values()).sort((left, right) => {
-      const leftTime = left.startTime ? new Date(left.startTime).getTime() : Number.NEGATIVE_INFINITY;
-      const rightTime = right.startTime ? new Date(right.startTime).getTime() : Number.NEGATIVE_INFINITY;
-      if (rightTime !== leftTime) {
-        return rightTime - leftTime;
-      }
-      return right.sid.localeCompare(left.sid);
-    });
+  private getCacheConfig(): { enabled: boolean; ttlSeconds: number } {
+    const config = vscode.workspace.getConfiguration('twilioAdmin');
+    return {
+      enabled: config.get<boolean>('cache.enabled') ?? true,
+      ttlSeconds: config.get<number>('cache.ttlSeconds') ?? 120,
+    };
   }
 
-  private sortMessageLogs(entries: MessageLogEntry[]): MessageLogEntry[] {
-    const deduped = new Map<string, MessageLogEntry>();
-    for (const entry of entries) {
-      deduped.set(entry.sid, entry);
+  private async readCallHistory(key: string, cacheConfig: { enabled: boolean; ttlSeconds: number }): Promise<LogHistoryRecord<CallLogEntry> | null> {
+    const runtime = this.runtimeCallHistory.get(key) ?? null;
+    if (runtime) {
+      return runtime;
     }
-    return Array.from(deduped.values()).sort((left, right) => {
-      const leftTime = left.dateSent ? new Date(left.dateSent).getTime() : Number.NEGATIVE_INFINITY;
-      const rightTime = right.dateSent ? new Date(right.dateSent).getTime() : Number.NEGATIVE_INFINITY;
-      if (rightTime !== leftTime) {
-        return rightTime - leftTime;
-      }
-      return right.sid.localeCompare(left.sid);
-    });
+    if (!cacheConfig.enabled) {
+      return null;
+    }
+
+    const persisted = await this.fileStore.readLogHistory<CallLogEntry>('call-logs', key);
+    if (!persisted) {
+      return null;
+    }
+    if (this.isExpired(persisted.updatedAt, cacheConfig.ttlSeconds)) {
+      return null;
+    }
+
+    this.runtimeCallHistory.set(key, persisted);
+    return persisted;
+  }
+
+  private async readMessageHistory(key: string, cacheConfig: { enabled: boolean; ttlSeconds: number }): Promise<LogHistoryRecord<MessageLogEntry> | null> {
+    const runtime = this.runtimeMessageHistory.get(key) ?? null;
+    if (runtime) {
+      return runtime;
+    }
+    if (!cacheConfig.enabled) {
+      return null;
+    }
+
+    const persisted = await this.fileStore.readLogHistory<MessageLogEntry>('message-logs', key);
+    if (!persisted) {
+      return null;
+    }
+    if (this.isExpired(persisted.updatedAt, cacheConfig.ttlSeconds)) {
+      return null;
+    }
+
+    this.runtimeMessageHistory.set(key, persisted);
+    return persisted;
+  }
+
+  private isExpired(updatedAt: string, ttlSeconds: number): boolean {
+    if (ttlSeconds <= 0) {
+      return true;
+    }
+    const ageSeconds = (Date.now() - new Date(updatedAt).getTime()) / 1000;
+    return ageSeconds > ttlSeconds;
   }
 }
