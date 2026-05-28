@@ -1,4 +1,5 @@
 import type { ExtensionToWebviewMessage } from '../../../src/types/messages.js';
+import type { BookmarkDetailTypographySettings } from '../../../src/types/typography.js';
 import type {
   BookmarkRecord,
   CallLogEntry,
@@ -31,6 +32,10 @@ let callLogsLoaded = false;
 let smsLogsLoaded = false;
 let callLogsLoading = false;
 let smsLogsLoading = false;
+let callLogsHasMore = false;
+let smsLogsHasMore = false;
+let callLogsHasMoreBeforeRefresh = false;
+let smsLogsHasMoreBeforeRefresh = false;
 
 // Call detail panel
 let selectedCall: CallDetail | null = null;
@@ -47,6 +52,14 @@ let webhookSaving = false;
 
 // Tag editing
 let tagInput = '';
+let typography: BookmarkDetailTypographySettings = {
+  header: 0,
+  metadata: 0,
+  logsTable: 0,
+  events: 0,
+  json: 0,
+  toolbar: 0,
+};
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -109,6 +122,16 @@ function directionIcon(dir: string | undefined): string {
 
 function post(msg: unknown): void {
   vscode.postMessage(msg);
+}
+
+function applyTypographySettings(): void {
+  const root = document.documentElement;
+  root.style.setProperty('--tw-bookmark-header-size', `${typography.header}px`);
+  root.style.setProperty('--tw-bookmark-metadata-size', `${typography.metadata}px`);
+  root.style.setProperty('--tw-bookmark-logs-size', `${typography.logsTable}px`);
+  root.style.setProperty('--tw-bookmark-events-size', `${typography.events}px`);
+  root.style.setProperty('--tw-bookmark-json-size', `${typography.json}px`);
+  root.style.setProperty('--tw-bookmark-toolbar-size', `${typography.toolbar}px`);
 }
 
 // ── Render: whole page ────────────────────────────────────────────────────────
@@ -292,14 +315,19 @@ function renderLogsToolbar(): string {
   const isCalls = activeTab === 'calls';
   const isLoaded = isCalls ? callLogsLoaded : smsLogsLoaded;
   const isLoading = isCalls ? callLogsLoading : smsLogsLoading;
+  const hasMore = isCalls ? callLogsHasMore : smsLogsHasMore;
   if (!isLoaded) {
     return '';
   }
 
   const label = isCalls ? 'Refresh Call Logs' : 'Refresh SMS Logs';
+  const loadMoreLabel = isCalls ? 'Load More Call Logs' : 'Load More SMS Logs';
   return `
     <div class="logs-toolbar">
-      <button id="refresh-logs-btn" class="btn-small" ${isLoading ? 'disabled' : ''}>${label}</button>
+      <div class="logs-toolbar-actions">
+        <button id="refresh-logs-btn" class="btn-small" ${isLoading ? 'disabled' : ''}>${label}</button>
+        ${hasMore ? `<button id="load-more-logs-btn" class="btn-small secondary" ${isLoading ? 'disabled' : ''}>${loadMoreLabel}</button>` : ''}
+      </div>
     </div>
   `;
 }
@@ -763,8 +791,9 @@ function attachHandlers(): void {
   });
 
   // Load buttons
-  document.getElementById('load-calls-btn')?.addEventListener('click', startLoadCallLogs);
-  document.getElementById('load-sms-btn')?.addEventListener('click', startLoadSmsLogs);
+  document.getElementById('load-calls-btn')?.addEventListener('click', () => startLoadCallLogs());
+  document.getElementById('load-sms-btn')?.addEventListener('click', () => startLoadSmsLogs());
+  document.getElementById('load-more-logs-btn')?.addEventListener('click', () => startLoadMoreActiveLogs());
   document.getElementById('refresh-logs-btn')?.addEventListener('click', startRefreshActiveLogs);
   document.getElementById('copy-all-events-btn')?.addEventListener('click', () => {
     void copyAllEventsToClipboard();
@@ -799,21 +828,34 @@ function attachHandlers(): void {
   });
 }
 
-function startLoadCallLogs(): void {
+function startLoadCallLogs(loadMore = false): void {
   callLogsLoading = true;
   renderAll();
-  post({ type: 'loadCallLogs' });
+  post({ type: 'loadCallLogs', loadMore });
 }
 
-function startLoadSmsLogs(): void {
+function startLoadSmsLogs(loadMore = false): void {
   smsLogsLoading = true;
   renderAll();
-  post({ type: 'loadSmsLogs' });
+  post({ type: 'loadSmsLogs', loadMore });
+}
+
+function startLoadMoreActiveLogs(): void {
+  if (activeTab === 'calls') {
+    if (!callLogsHasMore || callLogsLoading) { return; }
+    startLoadCallLogs(true);
+    return;
+  }
+
+  if (!smsLogsHasMore || smsLogsLoading) { return; }
+  startLoadSmsLogs(true);
 }
 
 function startRefreshActiveLogs(): void {
   if (activeTab === 'calls') {
     if (!callLogsLoaded || callLogsLoading) { return; }
+    callLogsHasMoreBeforeRefresh = callLogsHasMore;
+    callLogsHasMore = false;
     callLogsLoading = true;
     renderAll();
     post({ type: 'refreshCallLogs' });
@@ -821,6 +863,8 @@ function startRefreshActiveLogs(): void {
   }
 
   if (!smsLogsLoaded || smsLogsLoading) { return; }
+  smsLogsHasMoreBeforeRefresh = smsLogsHasMore;
+  smsLogsHasMore = false;
   smsLogsLoading = true;
   renderAll();
   post({ type: 'refreshSmsLogs' });
@@ -843,6 +887,11 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebviewMessag
   const msg = event.data;
 
   switch (msg.type) {
+    case 'uiTypographySettings':
+      typography = msg.settings.bookmarkDetail;
+      applyTypographySettings();
+      break;
+
     case 'bookmarkLoaded':
       bookmark       = msg.bookmark;
       subaccountName = msg.subaccountName;
@@ -862,6 +911,8 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebviewMessag
       callLogs         = msg.entries;
       callLogsLoaded   = true;
       callLogsLoading  = false;
+      callLogsHasMore  = msg.hasMore;
+      callLogsHasMoreBeforeRefresh = false;
       renderAll();
       break;
 
@@ -869,6 +920,8 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebviewMessag
       smsLogs         = msg.entries;
       smsLogsLoaded   = true;
       smsLogsLoading  = false;
+      smsLogsHasMore  = msg.hasMore;
+      smsLogsHasMoreBeforeRefresh = false;
       renderAll();
       break;
 
@@ -912,11 +965,23 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebviewMessag
 
     case 'error':
       showToast(msg.message, true);
-      // Reset saving states
-      webhookSaving    = false;
-      callLogsLoading  = false;
-      smsLogsLoading   = false;
-      callDetailLoading = false;
+      // Reset only the state that matches the failing operation.
+      if (!msg.context) {
+        webhookSaving = false;
+        callLogsLoading = false;
+        smsLogsLoading = false;
+        callDetailLoading = false;
+      } else if (msg.context === 'callLogs') {
+        callLogsLoading = false;
+        callLogsHasMore = callLogsHasMoreBeforeRefresh || callLogsHasMore;
+      } else if (msg.context === 'smsLogs') {
+        smsLogsLoading = false;
+        smsLogsHasMore = smsLogsHasMoreBeforeRefresh || smsLogsHasMore;
+      } else if (msg.context === 'callDetail') {
+        callDetailLoading = false;
+      } else if (msg.context === 'saveWebhooks') {
+        webhookSaving = false;
+      }
       renderAll();
       break;
 
@@ -944,6 +1009,15 @@ function showToast(message: string, isError = false): void {
 function injectStyles(): void {
   const style = document.createElement('style');
   style.textContent = `
+    :root {
+      --tw-bookmark-header-size: var(--vscode-font-size);
+      --tw-bookmark-metadata-size: var(--vscode-font-size);
+      --tw-bookmark-logs-size: var(--vscode-font-size);
+      --tw-bookmark-events-size: var(--vscode-font-size);
+      --tw-bookmark-json-size: var(--vscode-font-size);
+      --tw-bookmark-toolbar-size: var(--vscode-font-size);
+    }
+
     *, *::before, *::after { box-sizing: border-box; }
     body {
       font-family: var(--vscode-font-family);
@@ -963,21 +1037,21 @@ function injectStyles(): void {
     /* Sections */
     .section { padding: 16px 20px; border-bottom: 1px solid var(--vscode-panel-border); }
     .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .section-title { font-size: 0.85em; font-weight: 600; color: var(--vscode-descriptionForeground); text-transform: uppercase; letter-spacing: 0.05em; margin: 0; }
+    .section-title { font-size: var(--tw-bookmark-metadata-size); font-weight: 600; color: var(--vscode-descriptionForeground); text-transform: uppercase; letter-spacing: 0.05em; margin: 0; }
 
     /* Header */
     .header-section { padding-bottom: 12px; }
     .header-top { display: flex; align-items: flex-start; gap: 8px; }
-    .page-title { font-size: 1.3em; font-weight: 600; margin: 0; line-height: 1.3; }
+    .page-title { font-size: var(--tw-bookmark-header-size); font-weight: 600; margin: 0; line-height: 1.3; }
     .editable-label { cursor: pointer; border-bottom: 1px dashed transparent; }
     .editable-label:hover { border-bottom-color: var(--vscode-foreground); }
     .label-edit-form { display: flex; gap: 6px; align-items: center; flex: 1; }
     .label-input {
       flex: 1; background: var(--vscode-input-background); color: var(--vscode-input-foreground);
-      border: 1px solid var(--vscode-focusBorder); padding: 4px 8px; font-size: 1.1em;
+      border: 1px solid var(--vscode-focusBorder); padding: 4px 8px; font-size: var(--tw-bookmark-header-size);
       font-family: inherit; border-radius: 2px; outline: none;
     }
-    .header-meta { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: 0.85em; color: var(--vscode-descriptionForeground); flex-wrap: wrap; }
+    .header-meta { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: var(--tw-bookmark-metadata-size); color: var(--vscode-descriptionForeground); flex-wrap: wrap; }
     .meta-number { font-family: var(--vscode-editor-font-family); }
     .meta-sep { opacity: 0.5; }
     .meta-notes { font-style: italic; }
@@ -985,23 +1059,23 @@ function injectStyles(): void {
     /* Tags */
     .tags-section { padding-top: 10px; padding-bottom: 10px; }
     .tags-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .tag-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-radius: 10px; font-size: 0.8em; }
+    .tag-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-radius: 10px; font-size: var(--tw-bookmark-metadata-size); }
     .tag-chip.small { padding: 1px 6px; font-size: 0.75em; }
     .tag-remove { background: none; border: none; cursor: pointer; color: inherit; opacity: 0.7; padding: 0; font-size: 1em; line-height: 1; }
     .tag-remove:hover { opacity: 1; }
-    .tag-input { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent); padding: 2px 8px; font-size: 0.8em; border-radius: 10px; outline: none; width: 120px; font-family: inherit; }
+    .tag-input { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent); padding: 2px 8px; font-size: var(--tw-bookmark-metadata-size); border-radius: 10px; outline: none; width: 120px; font-family: inherit; }
     .tag-input:focus { border-color: var(--vscode-focusBorder); }
 
     /* Webhooks */
     .webhooks-section {}
     .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
     .config-row { display: contents; }
-    .config-label { font-size: 0.8em; color: var(--vscode-descriptionForeground); padding: 3px 0; align-self: center; }
-    .config-value { font-size: 0.85em; padding: 3px 0; word-break: break-all; }
+    .config-label { font-size: var(--tw-bookmark-metadata-size); color: var(--vscode-descriptionForeground); padding: 3px 0; align-self: center; }
+    .config-value { font-size: var(--tw-bookmark-metadata-size); padding: 3px 0; word-break: break-all; }
     .webhook-form { display: flex; flex-direction: column; gap: 10px; }
     .form-field { display: flex; flex-direction: column; gap: 3px; }
     .form-field-narrow { max-width: 200px; }
-    .form-field label { font-size: 0.8em; font-weight: 600; color: var(--vscode-descriptionForeground); }
+    .form-field label { font-size: var(--tw-bookmark-metadata-size); font-weight: 600; color: var(--vscode-descriptionForeground); }
     .form-field input, .form-field select {
       background: var(--vscode-input-background); color: var(--vscode-input-foreground);
       border: 1px solid var(--vscode-input-border, transparent); padding: 5px 8px;
@@ -1013,15 +1087,15 @@ function injectStyles(): void {
 
     /* Tabs */
     .tabs { display: flex; border-bottom: 1px solid var(--vscode-panel-border); padding: 0 20px; }
-    .tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 16px; font-size: 0.9em; font-family: inherit; cursor: pointer; color: var(--vscode-descriptionForeground); margin-bottom: -1px; }
+    .tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 16px; font-size: var(--tw-bookmark-toolbar-size); font-family: inherit; cursor: pointer; color: var(--vscode-descriptionForeground); margin-bottom: -1px; }
     .tab.active { color: var(--vscode-foreground); border-bottom-color: var(--vscode-focusBorder); }
     .tab:hover:not(.active) { color: var(--vscode-foreground); }
     .logs-toolbar { display: flex; justify-content: flex-end; padding: 10px 20px 0; }
 
     /* Tables */
     .table-wrap { overflow-x: auto; }
-    .logs-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
-    .logs-table th { text-align: left; padding: 8px 12px; font-size: 0.8em; font-weight: 600; color: var(--vscode-descriptionForeground); border-bottom: 1px solid var(--vscode-panel-border); white-space: nowrap; }
+    .logs-table { width: 100%; border-collapse: collapse; font-size: var(--tw-bookmark-logs-size); }
+    .logs-table th { text-align: left; padding: 8px 12px; font-size: var(--tw-bookmark-logs-size); font-weight: 600; color: var(--vscode-descriptionForeground); border-bottom: 1px solid var(--vscode-panel-border); white-space: nowrap; }
     .logs-table td { padding: 7px 12px; border-bottom: 1px solid var(--vscode-list-hoverBackground); white-space: nowrap; }
     .log-row { cursor: pointer; }
     .log-row:hover td { background: var(--vscode-list-hoverBackground); }
@@ -1038,7 +1112,7 @@ function injectStyles(): void {
     .count-badge { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 1px 6px; border-radius: 8px; font-size: 0.75em; font-weight: normal; margin-left: 6px; vertical-align: middle; }
 
     /* Buttons */
-    .btn-small { padding: 3px 10px; font-size: 0.8em; font-family: inherit; cursor: pointer; border-radius: 2px; border: 1px solid var(--vscode-button-secondaryBackground); background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+    .btn-small { padding: 3px 10px; font-size: var(--tw-bookmark-toolbar-size); font-family: inherit; cursor: pointer; border-radius: 2px; border: 1px solid var(--vscode-button-secondaryBackground); background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
     .btn-small:hover { background: var(--vscode-button-secondaryHoverBackground); }
     .btn-small.secondary { background: transparent; border-color: var(--vscode-panel-border); color: var(--vscode-foreground); }
     .btn-primary { padding: 5px 14px; font-size: inherit; font-family: inherit; cursor: pointer; border: none; border-radius: 2px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
@@ -1046,8 +1120,10 @@ function injectStyles(): void {
     .btn-primary:disabled { opacity: 0.6; cursor: default; }
     .btn-icon-sm { background: none; border: none; cursor: pointer; font-size: 1.1em; padding: 4px 8px; color: var(--vscode-foreground); border-radius: 2px; }
     .btn-icon-sm:hover { background: var(--vscode-toolbar-hoverBackground); }
-    .btn-play { padding: 2px 10px; font-size: 0.8em; font-family: inherit; cursor: pointer; border: 1px solid var(--vscode-button-background); background: transparent; color: var(--vscode-button-background); border-radius: 2px; white-space: nowrap; }
+    .btn-play { padding: 2px 10px; font-size: var(--tw-bookmark-events-size); font-family: inherit; cursor: pointer; border: 1px solid var(--vscode-button-background); background: transparent; color: var(--vscode-button-background); border-radius: 2px; white-space: nowrap; }
     .btn-play:hover { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+    .logs-toolbar { display: flex; justify-content: flex-end; padding: 10px 20px 0; }
+    .logs-toolbar-actions { display: flex; gap: 8px; align-items: center; }
 
     /* Call detail panel */
     .detail-panel { display: flex; flex-direction: column; height: 100%; }
@@ -1058,18 +1134,18 @@ function injectStyles(): void {
     .detail-sid { display: flex; flex-direction: column; gap: 2px; }
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
     .detail-field { display: flex; flex-direction: column; gap: 2px; }
-    .field-label { font-size: 0.75em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--vscode-descriptionForeground); }
-    .field-value { font-size: 0.9em; word-break: break-all; }
+    .field-label { font-size: var(--tw-bookmark-metadata-size); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--vscode-descriptionForeground); }
+    .field-value { font-size: var(--tw-bookmark-events-size); word-break: break-all; }
 
     .detail-section { border-top: 1px solid var(--vscode-panel-border); padding-top: 14px; }
     .detail-section-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-    .detail-section-title { font-size: 0.8em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); margin: 0 0 10px; }
+    .detail-section-title { font-size: var(--tw-bookmark-events-size); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); margin: 0 0 10px; }
 
     /* Recordings */
     .recording-card { background: var(--vscode-list-hoverBackground); border-radius: 4px; padding: 10px 12px; margin-bottom: 8px; }
     .recording-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .recording-info { display: flex; gap: 8px; align-items: center; font-size: 0.85em; flex-wrap: wrap; }
-    .recording-sid { font-size: 0.75em; margin-top: 4px; }
+    .recording-info { display: flex; gap: 8px; align-items: center; font-size: var(--tw-bookmark-events-size); flex-wrap: wrap; }
+    .recording-sid { font-size: var(--tw-bookmark-events-size); margin-top: 4px; }
 
     /* Events */
     .event-card { display: flex; gap: 10px; margin-bottom: 12px; }
@@ -1077,25 +1153,25 @@ function injectStyles(): void {
     .event-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
     .event-request, .event-response { background: var(--vscode-list-hoverBackground); border-radius: 4px; padding: 8px 10px; }
     .event-url-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
-    .event-url { font-size: 0.8em; word-break: break-all; }
+    .event-url { font-size: var(--tw-bookmark-events-size); word-break: break-all; }
     .event-params { margin-top: 4px; }
-    .params-table { border-collapse: collapse; width: 100%; font-size: 0.78em; }
+    .params-table { border-collapse: collapse; width: 100%; font-size: var(--tw-bookmark-events-size); }
     .params-table td { padding: 2px 8px 2px 0; vertical-align: top; }
     .param-name { color: var(--vscode-descriptionForeground); white-space: nowrap; padding-right: 12px !important; }
     .param-value { word-break: break-all; }
     .response-status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-    .response-body { margin: 0; font-size: 0.78em; font-family: var(--vscode-editor-font-family); white-space: pre-wrap; word-break: break-all; max-height: 160px; overflow-y: auto; color: var(--vscode-foreground); }
+    .response-body { margin: 0; font-size: var(--tw-bookmark-json-size); font-family: var(--vscode-editor-font-family); white-space: pre-wrap; word-break: break-all; max-height: 160px; overflow-y: auto; color: var(--vscode-foreground); }
 
     /* Issues */
     .issue-card { background: var(--vscode-list-hoverBackground); border-radius: 4px; padding: 10px 12px; margin-bottom: 8px; }
     .issue-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
-    .issue-message { font-size: 0.86em; }
-    .issue-url { font-size: 0.75em; margin-top: 4px; word-break: break-all; }
+    .issue-message { font-size: var(--tw-bookmark-events-size); }
+    .issue-url { font-size: var(--tw-bookmark-events-size); margin-top: 4px; word-break: break-all; }
 
     /* Misc */
     .mono { font-family: var(--vscode-editor-font-family); }
     .muted { color: var(--vscode-descriptionForeground); }
-    .small { font-size: 0.85em; }
+    .small { font-size: var(--tw-bookmark-events-size); }
     .state-msg { padding: 24px; text-align: center; color: var(--vscode-descriptionForeground); }
 
     /* Toast */
@@ -1115,3 +1191,4 @@ document.getElementById('app')!.innerHTML =
   '<div class="state-msg muted">Loading bookmark…</div>';
 
 post({ type: 'ready' });
+

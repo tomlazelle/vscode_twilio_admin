@@ -1,9 +1,18 @@
 import * as vscode from 'vscode';
-import type { CallLogEntry, MessageLogEntry } from '../types/models.js';
+import type { CallLogEntry, LogHistoryRecord, LogPageResult, MessageLogEntry } from '../types/models.js';
 import type { TwilioService } from './twilioService.js';
 import type { FileStore } from '../store/fileStore.js';
+import { dedupeBySid, sortByTimestampThenSid } from '../util/logEntrySorting.js';
+
+interface GetLogsOptions {
+  forceRefresh?: boolean;
+  loadMore?: boolean;
+}
 
 export class LogsService {
+  private readonly runtimeCallHistory = new Map<string, LogHistoryRecord<CallLogEntry>>();
+  private readonly runtimeMessageHistory = new Map<string, LogHistoryRecord<MessageLogEntry>>();
+
   constructor(
     private readonly twilioService: TwilioService,
     private readonly fileStore: FileStore
@@ -12,56 +21,206 @@ export class LogsService {
   async getCallLogs(
     subaccountId: string,
     phoneNumber: string,
-    forceRefresh = false,
+    options: GetLogsOptions = {},
     token?: vscode.CancellationToken
-  ): Promise<CallLogEntry[]> {
+  ): Promise<LogPageResult<CallLogEntry>> {
     const config = vscode.workspace.getConfiguration('twilioAdmin');
-    const cacheEnabled = config.get<boolean>('cache.enabled') ?? true;
-    const ttl = config.get<number>('cache.ttlSeconds') ?? 120;
-    const limit = config.get<number>('logs.pageSize') ?? 50;
+    const pageSize = config.get<number>('logs.pageSize') ?? 50;
     const key = `${subaccountId}:${phoneNumber}`;
+    const forceRefresh = options.forceRefresh ?? false;
+    const loadMore = options.loadMore ?? false;
+    const cacheConfig = this.getCacheConfig();
 
-    if (cacheEnabled && !forceRefresh) {
-      const cached = await this.fileStore.readCacheEntry<CallLogEntry[]>('call-logs', key, ttl);
-      if (cached) {
-        return cached;
+    if (forceRefresh) {
+      this.runtimeCallHistory.delete(key);
+      if (cacheConfig.enabled) {
+        await this.fileStore.clearLogHistory('call-logs', key);
       }
     }
 
-    const entries = await this.twilioService.getCallLogs(subaccountId, phoneNumber, limit, token);
+    const existing = forceRefresh ? null : await this.readCallHistory(key, cacheConfig);
 
-    if (cacheEnabled) {
-      await this.fileStore.writeCacheEntry('call-logs', key, entries);
+    if (!forceRefresh && existing && !loadMore) {
+      return {
+        entries: existing.entries,
+        hasMore: existing.hasMore,
+        nextPageUrls: existing.nextPageUrls,
+        updatedAt: existing.updatedAt,
+      };
     }
 
-    return entries;
+    if (loadMore && existing && !existing.hasMore) {
+      return {
+        entries: existing.entries,
+        hasMore: existing.hasMore,
+        nextPageUrls: existing.nextPageUrls,
+        updatedAt: existing.updatedAt,
+      };
+    }
+
+    const page = await this.twilioService.getCallLogsPage(
+      subaccountId,
+      phoneNumber,
+      pageSize,
+      loadMore ? existing?.nextPageUrls : undefined,
+      token
+    );
+    const mergedEntries = sortByTimestampThenSid(
+      dedupeBySid([...(forceRefresh ? [] : (existing?.entries ?? [])), ...page.entries]),
+      entry => entry.startTime,
+    );
+    const record: LogHistoryRecord<CallLogEntry> = {
+      version: 1,
+      kind: 'call-logs',
+      key,
+      entries: mergedEntries,
+      hasMore: page.hasMore,
+      nextPageUrls: page.nextPageUrls,
+      updatedAt: page.updatedAt,
+    };
+
+    this.runtimeCallHistory.set(key, record);
+    if (cacheConfig.enabled) {
+      await this.fileStore.writeLogHistory('call-logs', key, record);
+    }
+
+    return {
+      entries: record.entries,
+      hasMore: record.hasMore,
+      nextPageUrls: record.nextPageUrls,
+      updatedAt: record.updatedAt,
+    };
   }
 
   async getMessageLogs(
     subaccountId: string,
     phoneNumber: string,
-    forceRefresh = false,
+    options: GetLogsOptions = {},
     token?: vscode.CancellationToken
-  ): Promise<MessageLogEntry[]> {
+  ): Promise<LogPageResult<MessageLogEntry>> {
     const config = vscode.workspace.getConfiguration('twilioAdmin');
-    const cacheEnabled = config.get<boolean>('cache.enabled') ?? true;
-    const ttl = config.get<number>('cache.ttlSeconds') ?? 120;
-    const limit = config.get<number>('logs.pageSize') ?? 50;
+    const pageSize = config.get<number>('logs.pageSize') ?? 50;
     const key = `${subaccountId}:${phoneNumber}`;
+    const forceRefresh = options.forceRefresh ?? false;
+    const loadMore = options.loadMore ?? false;
+    const cacheConfig = this.getCacheConfig();
 
-    if (cacheEnabled && !forceRefresh) {
-      const cached = await this.fileStore.readCacheEntry<MessageLogEntry[]>('message-logs', key, ttl);
-      if (cached) {
-        return cached;
+    if (forceRefresh) {
+      this.runtimeMessageHistory.delete(key);
+      if (cacheConfig.enabled) {
+        await this.fileStore.clearLogHistory('message-logs', key);
       }
     }
 
-    const entries = await this.twilioService.getMessageLogs(subaccountId, phoneNumber, limit, token);
+    const existing = forceRefresh ? null : await this.readMessageHistory(key, cacheConfig);
 
-    if (cacheEnabled) {
-      await this.fileStore.writeCacheEntry('message-logs', key, entries);
+    if (!forceRefresh && existing && !loadMore) {
+      return {
+        entries: existing.entries,
+        hasMore: existing.hasMore,
+        nextPageUrls: existing.nextPageUrls,
+        updatedAt: existing.updatedAt,
+      };
     }
 
-    return entries;
+    if (loadMore && existing && !existing.hasMore) {
+      return {
+        entries: existing.entries,
+        hasMore: existing.hasMore,
+        nextPageUrls: existing.nextPageUrls,
+        updatedAt: existing.updatedAt,
+      };
+    }
+
+    const page = await this.twilioService.getMessageLogsPage(
+      subaccountId,
+      phoneNumber,
+      pageSize,
+      loadMore ? existing?.nextPageUrls : undefined,
+      token
+    );
+    const mergedEntries = sortByTimestampThenSid(
+      dedupeBySid([...(forceRefresh ? [] : (existing?.entries ?? [])), ...page.entries]),
+      entry => entry.dateSent,
+    );
+    const record: LogHistoryRecord<MessageLogEntry> = {
+      version: 1,
+      kind: 'message-logs',
+      key,
+      entries: mergedEntries,
+      hasMore: page.hasMore,
+      nextPageUrls: page.nextPageUrls,
+      updatedAt: page.updatedAt,
+    };
+
+    this.runtimeMessageHistory.set(key, record);
+    if (cacheConfig.enabled) {
+      await this.fileStore.writeLogHistory('message-logs', key, record);
+    }
+
+    return {
+      entries: record.entries,
+      hasMore: record.hasMore,
+      nextPageUrls: record.nextPageUrls,
+      updatedAt: record.updatedAt,
+    };
+  }
+
+  private getCacheConfig(): { enabled: boolean; ttlSeconds: number } {
+    const config = vscode.workspace.getConfiguration('twilioAdmin');
+    return {
+      enabled: config.get<boolean>('cache.enabled') ?? true,
+      ttlSeconds: config.get<number>('cache.ttlSeconds') ?? 120,
+    };
+  }
+
+  private async readCallHistory(key: string, cacheConfig: { enabled: boolean; ttlSeconds: number }): Promise<LogHistoryRecord<CallLogEntry> | null> {
+    const runtime = this.runtimeCallHistory.get(key) ?? null;
+    if (runtime) {
+      return runtime;
+    }
+    if (!cacheConfig.enabled) {
+      return null;
+    }
+
+    const persisted = await this.fileStore.readLogHistory<CallLogEntry>('call-logs', key);
+    if (!persisted) {
+      return null;
+    }
+    if (this.isExpired(persisted.updatedAt, cacheConfig.ttlSeconds)) {
+      return null;
+    }
+
+    this.runtimeCallHistory.set(key, persisted);
+    return persisted;
+  }
+
+  private async readMessageHistory(key: string, cacheConfig: { enabled: boolean; ttlSeconds: number }): Promise<LogHistoryRecord<MessageLogEntry> | null> {
+    const runtime = this.runtimeMessageHistory.get(key) ?? null;
+    if (runtime) {
+      return runtime;
+    }
+    if (!cacheConfig.enabled) {
+      return null;
+    }
+
+    const persisted = await this.fileStore.readLogHistory<MessageLogEntry>('message-logs', key);
+    if (!persisted) {
+      return null;
+    }
+    if (this.isExpired(persisted.updatedAt, cacheConfig.ttlSeconds)) {
+      return null;
+    }
+
+    this.runtimeMessageHistory.set(key, persisted);
+    return persisted;
+  }
+
+  private isExpired(updatedAt: string, ttlSeconds: number): boolean {
+    if (ttlSeconds <= 0) {
+      return true;
+    }
+    const ageSeconds = (Date.now() - new Date(updatedAt).getTime()) / 1000;
+    return ageSeconds > ttlSeconds;
   }
 }

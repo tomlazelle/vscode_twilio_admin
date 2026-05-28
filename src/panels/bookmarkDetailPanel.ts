@@ -3,6 +3,7 @@ import { generateNonce } from '../util/nonce.js';
 import type { ServiceContainer } from '../types/models.js';
 import type { ExtensionToWebviewMessage, WebviewToExtensionMessage } from '../types/messages.js';
 import { z } from 'zod';
+import { resolveUiTypographySettings } from '../util/uiTypographySettings.js';
 
 // Zod schema for validating incoming webview messages
 const UpdateWebhooksSchema = z.object({
@@ -19,9 +20,9 @@ const IncomingMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('updateLabel'), label: z.string().min(1), notes: z.string().optional() }),
   z.object({ type: z.literal('updateTags'),  tags: z.array(z.string()) }),
   z.object({ type: z.literal('saveWebhooks'), request: UpdateWebhooksSchema }),
-  z.object({ type: z.literal('loadCallLogs') }),
+  z.object({ type: z.literal('loadCallLogs'), loadMore: z.boolean().optional() }),
   z.object({ type: z.literal('refreshCallLogs') }),
-  z.object({ type: z.literal('loadSmsLogs') }),
+  z.object({ type: z.literal('loadSmsLogs'), loadMore: z.boolean().optional() }),
   z.object({ type: z.literal('refreshSmsLogs') }),
   z.object({ type: z.literal('loadCallDetail'), callSid: z.string() }),
   z.object({ type: z.literal('playRecording'), recordingSid: z.string(), accountSid: z.string().optional() }),
@@ -31,6 +32,10 @@ export class BookmarkDetailPanel {
   static currentPanel: BookmarkDetailPanel | undefined;
   private readonly _panel: vscode.WebviewPanel;
   private readonly _disposables: vscode.Disposable[] = [];
+
+  static refreshCurrentTypography(): void {
+    BookmarkDetailPanel.currentPanel?._sendTypographySettings();
+  }
 
   static createOrShow(
     extensionUri: vscode.Uri,
@@ -43,7 +48,7 @@ export class BookmarkDetailPanel {
 
     if (BookmarkDetailPanel.currentPanel) {
       BookmarkDetailPanel.currentPanel._panel.reveal(column);
-      void BookmarkDetailPanel.currentPanel._loadBookmark(bookmarkId, services);
+      void BookmarkDetailPanel.currentPanel._loadBookmark(bookmarkId);
       return;
     }
 
@@ -84,13 +89,14 @@ export class BookmarkDetailPanel {
     );
   }
 
-  private async _loadBookmark(bookmarkId: string, services: ServiceContainer): Promise<void> {
+  private async _loadBookmark(bookmarkId: string): Promise<void> {
     this.bookmarkId = bookmarkId;
     this._panel.webview.html = this._getHtml(this._panel.webview);
-    await this._loadInitialData(services);
   }
 
   private async _loadInitialData(services: ServiceContainer): Promise<void> {
+    this._sendTypographySettings();
+
     const bookmark = await services.bookmarkService.getById(this.bookmarkId);
     if (!bookmark) {
       this._postMessage({ type: 'error', message: 'Bookmark not found.' });
@@ -128,6 +134,7 @@ export class BookmarkDetailPanel {
 
     switch (msg.type) {
       case 'ready':
+        this._sendTypographySettings();
         await this._loadInitialData(this.services);
         break;
 
@@ -158,11 +165,18 @@ export class BookmarkDetailPanel {
 
       case 'loadCallLogs': {
         try {
-          const entries = await this.services.logsService.getCallLogs(
+          const page = await this.services.logsService.getCallLogs(
             bookmark.subaccountId,
-            bookmark.phoneNumber
+            bookmark.phoneNumber,
+            { loadMore: msg.loadMore }
           );
-          this._postMessage({ type: 'callLogsLoaded', entries });
+          this._postMessage({
+            type: 'callLogsLoaded',
+            entries: page.entries,
+            hasMore: page.hasMore,
+            nextPageUrls: page.nextPageUrls,
+            updatedAt: page.updatedAt,
+          });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           this._postMessage({ type: 'error', message, context: 'callLogs' });
@@ -172,12 +186,18 @@ export class BookmarkDetailPanel {
 
       case 'refreshCallLogs': {
         try {
-          const entries = await this.services.logsService.getCallLogs(
+          const page = await this.services.logsService.getCallLogs(
             bookmark.subaccountId,
             bookmark.phoneNumber,
-            true
+            { forceRefresh: true }
           );
-          this._postMessage({ type: 'callLogsLoaded', entries });
+          this._postMessage({
+            type: 'callLogsLoaded',
+            entries: page.entries,
+            hasMore: page.hasMore,
+            nextPageUrls: page.nextPageUrls,
+            updatedAt: page.updatedAt,
+          });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           this._postMessage({ type: 'error', message, context: 'callLogs' });
@@ -187,11 +207,18 @@ export class BookmarkDetailPanel {
 
       case 'loadSmsLogs': {
         try {
-          const entries = await this.services.logsService.getMessageLogs(
+          const page = await this.services.logsService.getMessageLogs(
             bookmark.subaccountId,
-            bookmark.phoneNumber
+            bookmark.phoneNumber,
+            { loadMore: msg.loadMore }
           );
-          this._postMessage({ type: 'smsLogsLoaded', entries });
+          this._postMessage({
+            type: 'smsLogsLoaded',
+            entries: page.entries,
+            hasMore: page.hasMore,
+            nextPageUrls: page.nextPageUrls,
+            updatedAt: page.updatedAt,
+          });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           this._postMessage({ type: 'error', message, context: 'smsLogs' });
@@ -201,12 +228,18 @@ export class BookmarkDetailPanel {
 
       case 'refreshSmsLogs': {
         try {
-          const entries = await this.services.logsService.getMessageLogs(
+          const page = await this.services.logsService.getMessageLogs(
             bookmark.subaccountId,
             bookmark.phoneNumber,
-            true
+            { forceRefresh: true }
           );
-          this._postMessage({ type: 'smsLogsLoaded', entries });
+          this._postMessage({
+            type: 'smsLogsLoaded',
+            entries: page.entries,
+            hasMore: page.hasMore,
+            nextPageUrls: page.nextPageUrls,
+            updatedAt: page.updatedAt,
+          });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           this._postMessage({ type: 'error', message, context: 'smsLogs' });
@@ -298,6 +331,13 @@ export class BookmarkDetailPanel {
 
   private _postMessage(msg: ExtensionToWebviewMessage): void {
     void this._panel.webview.postMessage(msg);
+  }
+
+  private _sendTypographySettings(): void {
+    this._postMessage({
+      type: 'uiTypographySettings',
+      settings: resolveUiTypographySettings(),
+    });
   }
 
   private _getHtml(webview: vscode.Webview): string {

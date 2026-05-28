@@ -5,6 +5,7 @@ import type {
   BookmarkRecord,
   PreferencesRecord,
   CacheEntry,
+  LogHistoryRecord,
 } from '../types/models.js';
 
 // ── Zod schemas ───────────────────────────────────────────────────────────────
@@ -42,6 +43,53 @@ const DEFAULT_PREFERENCES: PreferencesRecord = {
 };
 
 const ROOT = 'twilio-admin';
+const LOG_HISTORY_VERSION = 1;
+
+const CallLogEntrySchema = z.object({
+  sid: z.string().min(1),
+  from: z.string(),
+  to: z.string(),
+  direction: z.string(),
+  status: z.string(),
+  startTime: z.string().optional(),
+  duration: z.number().optional(),
+});
+
+const MessageLogEntrySchema = z.object({
+  sid: z.string().min(1),
+  from: z.string(),
+  to: z.string(),
+  direction: z.string(),
+  status: z.string(),
+  dateSent: z.string().optional(),
+  body: z.string().optional(),
+});
+
+const CallLogHistorySchema = z.object({
+  version: z.literal(LOG_HISTORY_VERSION),
+  kind: z.literal('call-logs'),
+  key: z.string(),
+  entries: z.array(CallLogEntrySchema),
+  hasMore: z.boolean(),
+  nextPageUrls: z.object({
+    to: z.string().optional(),
+    from: z.string().optional(),
+  }).optional(),
+  updatedAt: z.string(),
+});
+
+const MessageLogHistorySchema = z.object({
+  version: z.literal(LOG_HISTORY_VERSION),
+  kind: z.literal('message-logs'),
+  key: z.string(),
+  entries: z.array(MessageLogEntrySchema),
+  hasMore: z.boolean(),
+  nextPageUrls: z.object({
+    to: z.string().optional(),
+    from: z.string().optional(),
+  }).optional(),
+  updatedAt: z.string(),
+});
 
 export class FileStore {
   constructor(private readonly storageUri: vscode.Uri) {}
@@ -108,6 +156,42 @@ export class FileStore {
     await this.writeJson(`cache/${type}/${safeName}.json`, entry);
   }
 
+  async readLogHistory<T>(
+    type: 'call-logs' | 'message-logs',
+    key: string
+  ): Promise<LogHistoryRecord<T> | null> {
+    const safeName = this.safeCacheKey(key);
+    const schema = type === 'call-logs' ? CallLogHistorySchema : MessageLogHistorySchema;
+    return this.readJson(`logs/${type}/${safeName}.json`, schema, null) as Promise<LogHistoryRecord<T> | null>;
+  }
+
+  async writeLogHistory<T>(
+    type: 'call-logs' | 'message-logs',
+    key: string,
+    record: LogHistoryRecord<T>
+  ): Promise<void> {
+    const safeName = this.safeCacheKey(key);
+    await this.ensureDir(`logs/${type}`);
+    const normalized: LogHistoryRecord<T> = {
+      ...record,
+      version: LOG_HISTORY_VERSION,
+    };
+    await this.writeJson(`logs/${type}/${safeName}.json`, normalized);
+  }
+
+  async clearLogHistory(
+    type: 'call-logs' | 'message-logs',
+    key: string
+  ): Promise<void> {
+    const safeName = this.safeCacheKey(key);
+    const uri = this.resolve(`logs/${type}/${safeName}.json`);
+    try {
+      await vscode.workspace.fs.delete(uri, { useTrash: false });
+    } catch {
+      // Missing history is fine.
+    }
+  }
+
   // ── Internal helpers ─────────────────────────────────────────────────────────
 
   private async readJson<T>(relativePath: string, schema: z.ZodSchema<T>, defaultValue: T): Promise<T> {
@@ -169,6 +253,10 @@ export class FileStore {
 
   private safeCacheKey(key: string): string {
     return key.replace(/[^a-zA-Z0-9_-]/g, '_');
+  }
+
+  private createLogHistorySchema() {
+    return z.union([CallLogHistorySchema, MessageLogHistorySchema]);
   }
 
   private isFileNotFound(err: unknown): boolean {

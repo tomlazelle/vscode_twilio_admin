@@ -3,6 +3,7 @@ import { generateNonce } from '../util/nonce.js';
 import type { ServiceContainer } from '../types/models.js';
 import type { ExtensionToWebviewMessage, WebviewToExtensionMessage } from '../types/messages.js';
 import { z } from 'zod';
+import { resolveUiTypographySettings } from '../util/uiTypographySettings.js';
 
 const IncomingMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready') }),
@@ -20,6 +21,10 @@ export class NumberBrowserPanel {
   static currentPanel: NumberBrowserPanel | undefined;
   private readonly _panel: vscode.WebviewPanel;
   private readonly _disposables: vscode.Disposable[] = [];
+
+  static refreshCurrentTypography(): void {
+    NumberBrowserPanel.currentPanel?._sendTypographySettings();
+  }
 
   static createOrShow(
     extensionUri: vscode.Uri,
@@ -101,6 +106,10 @@ export class NumberBrowserPanel {
 
     switch (msg.type) {
       case 'ready':
+        this._sendTypographySettings();
+        await this._loadNumbers();
+        break;
+
       case 'refreshNumbers':
         await this._loadNumbers();
         break;
@@ -136,6 +145,13 @@ export class NumberBrowserPanel {
 
   private _postMessage(msg: ExtensionToWebviewMessage): void {
     void this._panel.webview.postMessage(msg);
+  }
+
+  private _sendTypographySettings(): void {
+    this._postMessage({
+      type: 'uiTypographySettings',
+      settings: resolveUiTypographySettings(),
+    });
   }
 
   private _getHtml(webview: vscode.Webview): string {

@@ -2,7 +2,7 @@
   "name": "twilio-admin",
   "displayName": "Twilio Admin",
   "description": "Manage Twilio subaccounts, phone numbers, and webhooks from VS Code",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "twilio-admin",
   "engines": {
     "vscode": "^1.85.0"
@@ -233,6 +233,125 @@
           "type": "boolean",
           "default": true,
           "description": "Allow passphrase-derived key when OS keychain is unavailable"
+        },
+        "twilioAdmin.ui.fontSize.baseSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Global base font size in pixels for Twilio Admin webviews (0 uses VS Code font size)"
+        },
+        "twilioAdmin.ui.fontSize.bookmarkDetail.headerSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Bookmark Detail headers and title (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.bookmarkDetail.metadataSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Bookmark Detail metadata and labels (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.bookmarkDetail.logsTableSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Bookmark Detail call and SMS log tables (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.bookmarkDetail.eventsSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Bookmark Detail events, recordings, and issues (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.bookmarkDetail.jsonSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Bookmark Detail request/response JSON and monospace fields (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.bookmarkDetail.toolbarSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Bookmark Detail tabs and toolbar actions (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.numberBrowser.headerSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Number Browser header and toolbar (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.numberBrowser.filtersSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Number Browser filter controls (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.numberBrowser.tableHeadersSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Number Browser table headers (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.numberBrowser.tableRowsSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Number Browser table row values (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.numberBrowser.metaTextSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Number Browser helper and metadata text (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.accountForm.headerSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Account Form headings (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.accountForm.labelsSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Account Form labels (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.accountForm.inputsSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Account Form input fields (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.accountForm.helpTextSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Account Form hints and validation text (0 uses global base size)"
+        },
+        "twilioAdmin.ui.fontSize.accountForm.buttonsSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 32,
+          "description": "Font size in pixels for Account Form buttons (0 uses global base size)"
         }
       }
     }
