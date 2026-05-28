@@ -48,7 +48,7 @@ export class BookmarkDetailPanel {
 
     if (BookmarkDetailPanel.currentPanel) {
       BookmarkDetailPanel.currentPanel._panel.reveal(column);
-      void BookmarkDetailPanel.currentPanel._loadBookmark(bookmarkId, services);
+      void BookmarkDetailPanel.currentPanel._loadBookmark(bookmarkId);
       return;
     }
 
@@ -89,7 +89,7 @@ export class BookmarkDetailPanel {
     );
   }
 
-  private async _loadBookmark(bookmarkId: string, services: ServiceContainer): Promise<void> {
+  private async _loadBookmark(bookmarkId: string): Promise<void> {
     this.bookmarkId = bookmarkId;
     this._panel.webview.html = this._getHtml(this._panel.webview);
   }

@@ -510,9 +510,26 @@ export class TwilioService {
       visitedParents.add(parentSid);
 
       let page = await client.calls.page({ parentCallSid: parentSid, pageSize });
-      while (true) {
+      for (const call of page.instances) {
         this.checkCancelled(token);
+        if (callMap.has(call.sid)) {
+          continue;
+        }
+        const entry = this.mapCallEntry(call);
+        callMap.set(entry.sid, entry);
+        queue.push(entry.sid);
+      }
+
+      while (page.nextPageUrl) {
+        this.checkCancelled(token);
+        const nextPage = await page.nextPage();
+        if (!nextPage) {
+          break;
+        }
+        page = nextPage;
+
         for (const call of page.instances) {
+          this.checkCancelled(token);
           if (callMap.has(call.sid)) {
             continue;
           }
@@ -520,14 +537,6 @@ export class TwilioService {
           callMap.set(entry.sid, entry);
           queue.push(entry.sid);
         }
-        if (!page.nextPageUrl) {
-          break;
-        }
-        const nextPage = await page.nextPage();
-        if (!nextPage) {
-          break;
-        }
-        page = nextPage;
       }
     }
   }
