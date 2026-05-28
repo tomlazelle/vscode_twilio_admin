@@ -12,6 +12,40 @@ function makeLogger(): Logger {
 }
 
 describe('TwilioService paging', () => {
+  it('treats missing cursor keys as exhausted directions during loadMore', async () => {
+    const callsPage = vi.fn(async () => ({
+      instances: [
+        { sid: 'CA-UNEXPECTED', from: '+1', to: '+2', direction: 'outbound-api', status: 'completed', startTime: new Date('2025-01-02T10:00:00.000Z') },
+      ],
+      nextPageUrl: undefined,
+    }));
+    const callsGetPage = vi.fn(async () => ({
+      instances: [],
+      nextPageUrl: undefined,
+    }));
+    const mockClient = {
+      calls: {
+        page: callsPage,
+        getPage: callsGetPage,
+      },
+      messages: {
+        page: vi.fn(),
+        getPage: vi.fn(),
+      },
+    } as any;
+
+    const service = new TwilioService({} as any, makeLogger());
+    (service as any).createClient = vi.fn(async () => mockClient);
+
+    const result = await service.getCallLogsPage('sub-1', '+15005550001', 50, {});
+
+    expect(callsGetPage).not.toHaveBeenCalled();
+    expect(callsPage).not.toHaveBeenCalled();
+    expect(result.entries).toEqual([]);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextPageUrls).toEqual({ to: undefined, from: undefined });
+  });
+
   it('does not re-fetch page 1 for an exhausted direction during loadMore', async () => {
     const callsPage = vi.fn(async () => ({
       instances: [],

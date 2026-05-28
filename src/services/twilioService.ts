@@ -147,10 +147,12 @@ export class TwilioService {
     this.checkCancelled(token);
 
     try {
-      const allowInitialFetch = !nextPageUrls;
+      const hasCursorState = nextPageUrls !== undefined;
+      const fetchToDirection = !hasCursorState || typeof nextPageUrls.to === 'string';
+      const fetchFromDirection = !hasCursorState || typeof nextPageUrls.from === 'string';
       const [toPage, fromPage] = await Promise.all([
-        this.fetchCallDirectionPage(client, phoneNumber, pageSize, 'to', nextPageUrls?.to, allowInitialFetch),
-        this.fetchCallDirectionPage(client, phoneNumber, pageSize, 'from', nextPageUrls?.from, allowInitialFetch),
+        this.fetchCallDirectionPage(client, phoneNumber, pageSize, 'to', nextPageUrls?.to, fetchToDirection),
+        this.fetchCallDirectionPage(client, phoneNumber, pageSize, 'from', nextPageUrls?.from, fetchFromDirection),
       ]);
       this.checkCancelled(token);
 
@@ -196,10 +198,12 @@ export class TwilioService {
     this.checkCancelled(token);
 
     try {
-      const allowInitialFetch = !nextPageUrls;
+      const hasCursorState = nextPageUrls !== undefined;
+      const fetchToDirection = !hasCursorState || typeof nextPageUrls.to === 'string';
+      const fetchFromDirection = !hasCursorState || typeof nextPageUrls.from === 'string';
       const [toPage, fromPage] = await Promise.all([
-        this.fetchMessageDirectionPage(client, phoneNumber, pageSize, 'to', nextPageUrls?.to, allowInitialFetch),
-        this.fetchMessageDirectionPage(client, phoneNumber, pageSize, 'from', nextPageUrls?.from, allowInitialFetch),
+        this.fetchMessageDirectionPage(client, phoneNumber, pageSize, 'to', nextPageUrls?.to, fetchToDirection),
+        this.fetchMessageDirectionPage(client, phoneNumber, pageSize, 'from', nextPageUrls?.from, fetchFromDirection),
       ]);
       this.checkCancelled(token);
 
