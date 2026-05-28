@@ -9,6 +9,7 @@ tsconfig*.json
 esbuild*.mjs
 vitest.config.ts
 .vscode/**
+.github/**
 **/*.map
 **/*.ts
 !dist/**

@@ -2,7 +2,7 @@
   "name": "twilio-admin",
   "displayName": "Twilio Admin",
   "description": "Manage Twilio subaccounts, phone numbers, and webhooks from VS Code",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "publisher": "twilio-admin",
   "engines": {
     "vscode": "^1.85.0"
