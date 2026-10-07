@@ -2,7 +2,7 @@
 
 A VS Code extension for managing Twilio phone numbers across multiple subaccounts — without leaving your editor.
 
-Twilio Admin is a local, single-user tool. It requires no backend service, no Docker, and no database. All data is stored on your local filesystem. Auth tokens are encrypted at rest using your OS keychain.
+Twilio Admin is a local, single-user tool. It requires no backend service, no Docker, and no database. All data is stored on your local filesystem, and auth tokens are encrypted at rest using your OS keychain.
 
 ## Features
 
@@ -18,27 +18,14 @@ Twilio Admin is a local, single-user tool. It requires no backend service, no Do
 
 - VS Code 1.85 or later
 - A Twilio account with one or more subaccounts
-- Node.js 20+ (development only — not required to run the installed extension)
 
 ## Installation
 
-### From a `.vsix` file
+Install from a `.vsix` file:
 
-1. Build the package (see [Development](#development) below), or obtain a pre-built `.vsix`.
-2. In VS Code, open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run **Extensions: Install from VSIX...**.
-3. Select the `.vsix` file.
-4. Reload VS Code when prompted.
-
-### From source
-
-```bash
-git clone <repo-url>
-cd vscode_twilio_admin
-npm install
-npm run compile:all
-```
-
-Then press `F5` in VS Code to launch an Extension Development Host with the extension loaded.
+1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run **Extensions: Install from VSIX...**.
+2. Select the `.vsix` file.
+3. Reload VS Code when prompted.
 
 ## Getting started
 
@@ -70,34 +57,9 @@ In the bookmark detail panel, switch between the **Call Logs** and **SMS Logs** 
 
 Run **Twilio Admin: Lock Credentials** to clear auth tokens from memory. On next use, the extension re-reads them from the OS keychain (or prompts for your passphrase if the keychain is unavailable). Locking is automatic when VS Code closes.
 
-## Credential security
+## Privacy and security
 
-Auth tokens are encrypted with **AES-256-GCM** before being written to disk. The key hierarchy works as follows:
-
-- A random 256-bit **master key** is generated on first use and stored in VS Code's `SecretStorage`, which delegates to the OS keychain (Windows Credential Manager, macOS Keychain, or Linux libsecret).
-- Each auth token is encrypted with its own random **data key**, which is itself encrypted with the master key. Only the ciphertext lands in the credentials file.
-- If the OS keychain is unavailable, a passphrase-derived key is used instead (PBKDF2-HMAC-SHA256, 600,000 iterations). The passphrase is never persisted.
-
-The file `secure/credentials.enc.json` in the extension's storage directory contains only ciphertext, IVs, and auth tags — never plaintext tokens.
-
-## Data storage
-
-All extension data is stored under VS Code's global storage path (typically `%APPDATA%\Code\User\globalStorage\twilio-admin\` on Windows):
-
-```
-twilio-admin/
-├── subaccounts.json          # Account metadata (no auth tokens)
-├── bookmarks.json            # Bookmarked numbers with labels and tags
-├── preferences.json          # Active tag filter, last selected account
-├── cache/
-│   ├── call-logs/            # Cached call log responses
-│   └── message-logs/         # Cached SMS log responses
-└── secure/
-    ├── credentials.enc.json  # Encrypted auth tokens
-    └── metadata.json         # Encryption metadata (key reference, KDF params)
-```
-
-No data leaves your machine except for direct HTTPS calls to `api.twilio.com`.
+Auth tokens are encrypted with AES-256-GCM and protected by your OS keychain (Windows Credential Manager, macOS Keychain, or Linux libsecret). If the keychain is unavailable, a passphrase you choose is used instead and is never saved. No data leaves your machine except direct HTTPS calls to `api.twilio.com`.
 
 ## Settings
 
@@ -126,126 +88,12 @@ All commands are available via the Command Palette (`Ctrl+Shift+P`) under the `T
 | `Twilio Admin: Lock Credentials` | Clear auth tokens from memory |
 | `Twilio Admin: Unlock Credentials` | Reload auth tokens from the OS keychain or passphrase |
 
-## Development
+## Contributing and development
 
-### Prerequisites
+Build instructions, project structure, release process, and storage internals are in [docs/REFERENCE.md](docs/REFERENCE.md).
 
-- Node.js 20+
-- npm 9+
+## Screenshot
 
-### Setup
+![Twilio Admin in VS Code: accounts, bookmarks and tags in the sidebar, with webhook settings, call logs and call detail for a bookmarked number](mockup/twilio-admin-mockup.png)
 
-```bash
-npm install
-```
-
-> If you see an `UNABLE_TO_VERIFY_LEAF_SIGNATURE` error (common behind corporate proxies), use:
-> ```bash
-> npm install --strict-ssl=false
-> ```
-
-### Build
-
-```bash
-# Extension host only
-npm run compile
-
-# Webview UI only
-npm run compile:webview
-
-# Both
-npm run compile:all
-
-# Watch mode (rebuilds on save)
-npm run watch
-```
-
-### Run in VS Code
-
-Press `F5` to launch an Extension Development Host. The extension activates automatically on startup.
-
-### Tests
-
-```bash
-# Unit tests (FileStore, SecretStore)
-npm test
-
-# Integration tests (requires VS Code)
-npm run test:integration
-```
-
-### Package
-
-```bash
-npm run package
-```
-
-Produces `twilio-admin-0.1.0.vsix` in the project root.
-
-## CI and release
-
-This repository uses two GitHub Actions workflows for releases:
-
-- `.github/workflows/semantic-release.yml`
-    - Trigger: push to `main`
-    - Runs `semantic-release` to compute the next release, update changelog/version metadata, and publish a GitHub release.
-
-- `.github/workflows/release-artifact.yml`
-    - Trigger: published release (and manual `workflow_dispatch`)
-    - Checks out the release tag, normalizes the package version from the tag, builds the extension, and uploads the `.vsix` artifact to that release.
-
-### Tag format for release artifacts
-
-The artifact workflow accepts these tag forms and converts them to a valid extension version before packaging:
-
-- `v1` -> `1.0.0`
-- `v1.2` -> `1.2.0`
-- `v1.2.3` (or prerelease/build variants) -> unchanged semantic version
-
-If a tag cannot be normalized to a semantic version, the workflow fails early with a clear error.
-
-### Project structure
-
-```
-src/
-├── extension.ts              # Activation entry point
-├── types/
-│   ├── models.ts             # Domain interfaces and data shapes
-│   └── messages.ts           # Webview ↔ extension message protocol
-├── store/
-│   ├── fileStore.ts          # JSON persistence via vscode.workspace.fs
-│   └── secretStore.ts        # AES-256-GCM credential encryption
-├── services/
-│   ├── subaccountService.ts  # Account CRUD
-│   ├── bookmarkService.ts    # Bookmark and tag CRUD
-│   ├── twilioService.ts      # Twilio API client
-│   └── logsService.ts        # Cached log retrieval
-├── views/
-│   ├── accountsTreeProvider.ts
-│   ├── bookmarksTreeProvider.ts
-│   └── tagsTreeProvider.ts
-├── panels/
-│   ├── bookmarkDetailPanel.ts
-│   └── numberBrowserPanel.ts
-├── commands/
-│   ├── accountCommands.ts
-│   ├── bookmarkCommands.ts
-│   └── credentialCommands.ts
-└── util/
-    ├── logger.ts             # Output channel with secret redaction
-    ├── nonce.ts              # CSP nonce generation
-    └── migration.ts          # Storage schema migration runner
-webview-ui/
-└── src/
-    ├── bookmarkDetail/       # Bookmark detail panel UI
-    └── numberBrowser/        # Number browser panel UI
-test/
-├── __mocks__/vscode.ts       # VS Code API mock for unit tests
-└── unit/
-    ├── fileStore.test.ts
-    └── secretStore.test.ts
-```
-
-## Migrating from the Twilio Admin web app
-
-If you have data in the PostgreSQL-backed Twilio Admin web app, export your accounts, bookmarks, and tags as CSV and use the migration utility (available in a future release). You will be prompted to re-enter auth tokens — they cannot be migrated from the plaintext database export for security reasons.
+*Illustrative mockup using sample data.*
