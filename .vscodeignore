@@ -13,3 +13,5 @@ vitest.config.ts
 **/*.map
 **/*.ts
 !dist/**
+mockup/**
+docs/**

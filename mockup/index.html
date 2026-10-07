@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Twilio Admin for VS Code — Mockup</title>
+<style>
+  :root {
+    --bg: #1e1e1e; --side: #252526; --act: #333333; --title: #3c3c3c; --status: #007acc;
+    --border: #3a3a3a; --fg: #cccccc; --muted: #8b8b8b; --hover: #2a2d2e; --sel: #37373d;
+    --input: #3c3c3c; --accent: #f22f46; --btn: #0e639c; --btn-h: #1177bb;
+    --green: #2ea04366; --green-t: #7ee787; --red: #f8514966; --red-t: #ff9b94;
+    --blue: #388bfd44; --blue-t: #79c0ff; --purple: #a371f744; --purple-t: #d2a8ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1115; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 13px; color: var(--fg);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .win { width: 1440px; max-width: 100%; height: 860px; background: var(--bg); border-radius: 10px; overflow: hidden;
+    display: flex; flex-direction: column; box-shadow: 0 30px 80px #000a, 0 0 0 1px #ffffff14; }
+  .titlebar { height: 32px; background: var(--title); display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 12px; color: #ccc; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .titlebar .t { flex: 1; text-align: center; margin-right: 52px; }
+  .body { flex: 1; display: flex; min-height: 0; }
+  .activity { width: 48px; background: var(--act); display: flex; flex-direction: column; align-items: center; padding-top: 6px; gap: 4px; }
+  .act-i { width: 48px; height: 48px; display: grid; place-items: center; color: #858585; position: relative; }
+  .act-i.on { color: #fff; }
+  .act-i.on::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; background: #fff; }
+  .act-i svg { width: 24px; height: 24px; }
+  .side { width: 280px; background: var(--side); display: flex; flex-direction: column; overflow: hidden; }
+  .side h3 { font-size: 11px; font-weight: 400; letter-spacing: .5px; text-transform: uppercase; padding: 10px 20px; }
+  .sec { font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 4px 8px; display: flex; align-items: center; gap: 4px; background: #ffffff08; border-top: 1px solid var(--border); }
+  .sec .plus { margin-left: auto; font-size: 16px; font-weight: 400; }
+  .row { display: flex; align-items: center; gap: 6px; height: 22px; padding-left: calc(8px + var(--d, 0) * 14px); white-space: nowrap; }
+  .row.sel { background: var(--sel); outline: 1px solid #ffffff22; outline-offset: -1px; }
+  .row .ic { width: 16px; text-align: center; color: var(--muted); font-size: 12px; }
+  .row .desc { color: var(--muted); font-size: 12px; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; }
+  .row .count { margin-left: auto; margin-right: 10px; background: #4d4d4d; color: #fff; border-radius: 10px; font-size: 11px; padding: 0 6px; }
+  .tree { padding: 2px 0 8px; }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .tabbar { height: 35px; background: var(--side); display: flex; }
+  .etab { padding: 0 14px; display: flex; align-items: center; gap: 8px; background: #2d2d2d; color: var(--muted); border-right: 1px solid var(--border); }
+  .etab.on { background: var(--bg); color: #fff; border-top: 1px solid var(--status); }
+  .editor { flex: 1; display: flex; min-height: 0; }
+  .col { flex: 1; overflow: hidden; padding: 20px 28px; min-width: 0; }
+  .detail { width: 410px; border-left: 1px solid var(--border); background: #1b1b1c; padding: 16px 20px; overflow: hidden; }
+  h1 { font-size: 22px; font-weight: 600; color: #fff; }
+  .meta { margin-top: 6px; color: var(--muted); }
+  .meta b { color: var(--fg); font-weight: 600; font-family: ui-monospace, Consolas, monospace; }
+  .meta .sep { margin: 0 8px; }
+  .chips { display: flex; gap: 6px; margin: 14px 0 6px; align-items: center; }
+  .chip { background: #4d4d4d; color: #fff; padding: 2px 9px; border-radius: 10px; font-size: 12px; }
+  .chip i { font-style: normal; opacity: .6; margin-left: 6px; }
+  .tagin { background: var(--input); border: 1px solid transparent; color: var(--muted); padding: 3px 9px; border-radius: 3px; width: 100px; font-size: 12px; }
+  .section { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
+  .sh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: #fff; font-weight: 600; }
+  .btn { background: var(--btn); color: #fff; padding: 3px 12px; border-radius: 2px; font-size: 12px; }
+  .btn.sec { background: #3a3d41; }
+  .grid { display: grid; grid-template-columns: 110px auto 100px auto; align-items: center; gap: 6px 14px; }
+  .lab { color: var(--muted); }
+  .mono { white-space: nowrap; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: #9cdcfe; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-top: 16px; }
+  .tab { padding: 7px 14px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.on { color: #fff; border-color: var(--accent); }
+  .toolbar { display: flex; gap: 8px; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-weight: 600; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  td { padding: 6px 10px; border-bottom: 1px solid #2c2c2c; font-size: 12.5px; white-space: nowrap; }
+  tr.s td { background: var(--sel); }
+  .badge { padding: 1px 8px; border-radius: 10px; font-size: 11.5px; }
+  .g { background: var(--green); color: var(--green-t); } .r { background: var(--red); color: var(--red-t); }
+  .b { background: var(--blue); color: var(--blue-t); } .p { background: var(--purple); color: var(--purple-t); }
+  .n { background: #ffffff1a; color: var(--fg); }
+  .back { color: var(--muted); margin-bottom: 8px; }
+  .detail h2 { margin: 16px 0 8px; }
+  .kv { display: grid; grid-template-columns: 96px 1fr; gap: 5px 10px; font-size: 12.5px; }
+  .ev { border: 1px solid var(--border); border-radius: 4px; margin-bottom: 8px; overflow: hidden; }
+  .ev .h { background: #ffffff0a; padding: 6px 10px; display: flex; gap: 8px; align-items: center; }
+  pre { padding: 8px 10px; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: #ce9178; line-height: 1.5; white-space: pre-wrap; }
+  .status { height: 22px; background: var(--status); color: #fff; display: flex; align-items: center; padding: 0 10px; gap: 18px; font-size: 12px; }
+  .status .r2 { margin-left: auto; }
+  .note { position: fixed; bottom: 6px; font-size: 11px; color: #667; }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar">
+    <span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span>
+    <span class="t">Support Hotline — Twilio Admin</span>
+  </div>
+  <div class="body">
+    <div class="activity">
+      <div class="act-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3h9l4 4v14H6z"/></svg></div>
+      <div class="act-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></div>
+      <div class="act-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 8v8M18 10c0 5-12 2-12 6"/></svg></div>
+      <div class="act-i on"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="35" cy="35" r="8" fill="currentColor"/><circle cx="65" cy="35" r="8" fill="currentColor"/><circle cx="35" cy="65" r="8" fill="currentColor"/><circle cx="65" cy="65" r="8" fill="currentColor"/></svg></div>
+    </div>
+
+    <div class="side">
+      <h3>Twilio Admin</h3>
+      <div class="sec">⌄ Accounts <span class="plus">+</span></div>
+      <div class="tree">
+        <div class="row" style="--d:0"><span class="ic">⌄</span>Production <span class="desc">AC9f3a…e21c</span></div>
+        <div class="row" style="--d:1"><span class="ic">☎</span>Browse Numbers</div>
+        <div class="row" style="--d:0"><span class="ic">›</span>Staging <span class="desc">AC41b7…09d4</span></div>
+        <div class="row" style="--d:0"><span class="ic">›</span>QA Sandbox <span class="desc">ACc802…7a5f</span></div>
+        <div class="row" style="--d:0"><span class="ic">›</span>Customer Demo <span class="desc">AC27de…b3a8</span></div>
+      </div>
+      <div class="sec">⌄ Bookmarks</div>
+      <div class="tree">
+        <div class="row sel" style="--d:0"><span class="ic">★</span>Support Hotline <span class="desc">+1 (555) 010-0142</span></div>
+        <div class="row" style="--d:0"><span class="ic">★</span>Sales Inbound <span class="desc">+1 (555) 010-0177</span></div>
+        <div class="row" style="--d:0"><span class="ic">★</span>2FA Verify <span class="desc">+1 (555) 010-0199</span></div>
+        <div class="row" style="--d:0"><span class="ic">★</span>Appointment Reminders <span class="desc">+1 (555) 010-0123</span></div>
+        <div class="row" style="--d:0"><span class="ic">★</span>IVR Main Menu <span class="desc">+1 (555) 010-0108</span></div>
+        <div class="row" style="--d:0"><span class="ic">★</span>Staging Test Line <span class="desc">+1 (555) 010-0155</span></div>
+      </div>
+      <div class="sec">⌄ Tags</div>
+      <div class="tree">
+        <div class="row"><span class="ic">#</span>production <span class="count">4</span></div>
+        <div class="row"><span class="ic">#</span>voice <span class="count">5</span></div>
+        <div class="row"><span class="ic">#</span>sms <span class="count">3</span></div>
+        <div class="row"><span class="ic">#</span>ivr <span class="count">2</span></div>
+        <div class="row"><span class="ic">#</span>testing <span class="count">2</span></div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="tabbar">
+        <div class="etab on">☎ Support Hotline</div>
+        <div class="etab">☎ Browse Numbers</div>
+      </div>
+      <div class="editor">
+        <div class="col">
+          <h1>Support Hotline</h1>
+          <div class="meta"><b>+1 (555) 010-0142</b><span class="sep">·</span>Production<span class="sep">·</span>Primary customer support line, routes to Studio flow</div>
+          <div class="chips"><span class="chip">production<i>×</i></span><span class="chip">voice<i>×</i></span><span class="chip">sms<i>×</i></span><span class="tagin">Add tag…</span></div>
+
+          <div class="section">
+            <div class="sh"><h2>Webhooks</h2><span class="btn">Edit</span></div>
+            <div class="grid">
+              <span class="lab">Voice URL</span><span class="mono">flows.example.com/support/voice</span>
+              <span class="lab">Voice Method</span><span><span class="badge p">POST</span></span>
+              <span class="lab">SMS URL</span><span class="mono">api.example.com/hooks/sms</span>
+              <span class="lab">SMS Method</span><span><span class="badge p">POST</span></span>
+              <span class="lab">Status Callback</span><span class="mono">api.example.com/hooks/status</span>
+              <span class="lab">Status Method</span><span><span class="badge b">GET</span></span>
+            </div>
+          </div>
+
+          <div class="tabs"><div class="tab on">Call Logs</div><div class="tab">SMS Logs</div></div>
+          <div class="toolbar"><span class="btn">Refresh Call Logs</span><span class="btn sec">Load More Call Logs</span></div>
+          <table>
+            <thead><tr><th>Date</th><th>From</th><th>To</th><th>Direction</th><th>Status</th><th>Duration</th></tr></thead>
+            <tbody>
+              <tr class="s"><td>Oct 7, 2026, 9:42 AM</td><td>+1 (555) 010-0311</td><td>+1 (555) 010-0142</td><td>↙ inbound</td><td><span class="badge g">completed</span></td><td>4m 12s</td></tr>
+              <tr><td>Oct 7, 2026, 9:15 AM</td><td>+1 (555) 010-0288</td><td>+1 (555) 010-0142</td><td>↙ inbound</td><td><span class="badge g">completed</span></td><td>1m 48s</td></tr>
+              <tr><td>Oct 7, 2026, 8:57 AM</td><td>+1 (555) 010-0142</td><td>+1 (555) 010-0264</td><td>↗ outbound-api</td><td><span class="badge r">no-answer</span></td><td>—</td></tr>
+              <tr><td>Oct 7, 2026, 8:31 AM</td><td>+1 (555) 010-0420</td><td>+1 (555) 010-0142</td><td>↙ inbound</td><td><span class="badge r">busy</span></td><td>0s</td></tr>
+              <tr><td>Oct 6, 2026, 5:44 PM</td><td>+1 (555) 010-0352</td><td>+1 (555) 010-0142</td><td>↙ inbound</td><td><span class="badge g">completed</span></td><td>12m 3s</td></tr>
+              <tr><td>Oct 6, 2026, 4:20 PM</td><td>+1 (555) 010-0142</td><td>+1 (555) 010-0377</td><td>↗ outbound-api</td><td><span class="badge g">completed</span></td><td>2m 30s</td></tr>
+              <tr><td>Oct 6, 2026, 3:02 PM</td><td>+1 (555) 010-0509</td><td>+1 (555) 010-0142</td><td>↙ inbound</td><td><span class="badge n">canceled</span></td><td>0s</td></tr>
+              <tr><td>Oct 6, 2026, 1:48 PM</td><td>+1 (555) 010-0195</td><td>+1 (555) 010-0142</td><td>↙ inbound</td><td><span class="badge g">completed</span></td><td>6m 55s</td></tr>
+              <tr><td>Oct 6, 2026, 11:10 AM</td><td>+1 (555) 010-0463</td><td>+1 (555) 010-0142</td><td>↙ inbound</td><td><span class="badge r">failed</span></td><td>0s</td></tr>
+              <tr><td>Oct 6, 2026, 9:36 AM</td><td>+1 (555) 010-0231</td><td>+1 (555) 010-0142</td><td>↙ inbound</td><td><span class="badge g">completed</span></td><td>3m 21s</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="detail">
+          <div class="back">← Call detail</div>
+          <h2 style="margin-top:4px">Call</h2>
+          <div class="kv">
+            <span class="lab">SID</span><span class="mono">CA7c1d…44e0</span>
+            <span class="lab">Status</span><span><span class="badge g">completed</span></span>
+            <span class="lab">From</span><span>+1 (555) 010-0311</span>
+            <span class="lab">To</span><span>+1 (555) 010-0142</span>
+            <span class="lab">Started</span><span>Oct 7, 2026, 9:42 AM</span>
+            <span class="lab">Duration</span><span>4m 12s</span>
+            <span class="lab">Price</span><span>-0.0170 USD</span>
+            <span class="lab">Answered by</span><span>human</span>
+          </div>
+          <h2>Recordings</h2>
+          <div class="kv"><span class="lab">RE2b90…a1c3</span><span>4m 10s · dual-channel · -0.0025 USD</span></div>
+          <h2>Event trace</h2>
+          <div class="ev"><div class="h"><span class="badge p">POST</span><span class="mono">/support/voice</span><span class="badge g" style="margin-left:auto">200</span></div>
+<pre>CallStatus=ringing
+Direction=inbound
+FromCountry=US
+Caller=+15550100311</pre></div>
+          <div class="ev"><div class="h"><span class="badge p">POST</span><span class="mono">/support/gather</span><span class="badge g" style="margin-left:auto">200</span></div>
+<pre>Digits=2
+SpeechResult=billing
+Confidence=0.94</pre></div>
+          <div class="ev"><div class="h"><span class="badge b">GET</span><span class="mono">/hooks/status</span><span class="badge g" style="margin-left:auto">200</span></div>
+<pre>CallStatus=completed
+CallDuration=252</pre></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="status"><span>⎇ master</span><span>✓ 0 ⚠ 0</span><span class="r2">🔒 Credentials unlocked</span><span>Twilio Admin: Production</span></div>
+</div>
+</body>
+</html>
